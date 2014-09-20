@@ -8,5 +8,5 @@ def index():
 
 @app.route('/chart')
 def chart():
-    stock = request.args.get('ticker')
-    return render_template('chart.html', stock=stock)
+    symbol = request.args.get('symbol')
+    return render_template('chart.html', symbol=symbol) 
