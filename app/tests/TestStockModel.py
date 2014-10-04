@@ -9,12 +9,19 @@ class TestStock(unittest.TestCase):
     
     def setUp(self):
         db.create_all()   # create test database
-        self.stock = Stock(symbol='tsla',name='Tesla Motors Inc',
+        self.stock = Stock(symbol='tsla',
+                           name='Tesla Motors Inc',
                            market='NASDAQ')
 
     def tearDown(self):
         db.drop_all()
         
+    def test_db(self):
+        ''' using 'TESTING_FLAG' environment variable to know which DB.. There's
+        a better way to do this.'''
+        assert('tmp/testing.db' in str(db.engine))
+
+
     def test_init(self):
         assert(self.stock.symbol == "TSLA")
         assert(self.stock.name == "Tesla Motors Inc")
@@ -51,16 +58,20 @@ class TestStock(unittest.TestCase):
         assert(StockPoint.query.count() == 0)
         # Pandas initially creates DatetimeIndices, so replicate it.
         dti1 = DatetimeIndex([dt.date(2014,8,9)])[0]
-        dti2 = DatetimeIndex([dt.date(2014,8,10)])[0]
-        df = DataFrame({'Date':[dti1,dti2],
-                        'Open':[2.,3.5],
-                        'High':[3.,5.5],
-                        'Low':[1.,1.5],
-                        'Close':[2.53,4.25],
-                        'Volume':[1234567,2345678]},
-                        index=[0,1])
+        df = DataFrame({'Date':[dti1],
+                        'Open':[2.],
+                        'High':[3.],
+                        'Low':[1.],
+                        'Close':[2.53],
+                        'Volume':[1234567]},
+                        index=[0])
         self.stock.save_points(df)
-        assert(StockPoint.query.count() == 2)
+        assert(StockPoint.query.count() == 1)
+        assert(len(self.stock.stockpoints) == 1)
+        queriedStock = Stock.query.filter(Stock.symbol == 'TSLA').first()
+        assert(queriedStock.id == 1)
+        queriedStockPoint = StockPoint.query.filter(StockPoint.stock_id == 1).first()
+        assert(queriedStockPoint is not None)
 
     @patch('app.models.Stock.fetch_ohlc_from_google')
     def test_fetch_and_save_missing_ohlc(self, mock_fetch):
@@ -119,3 +130,29 @@ class TestStock(unittest.TestCase):
         assert(df.loc[two_days_ago]['Volume'] == 1234567)
         assert(df.loc[one_day_ago]['Close'] == 4.25)
 
+    ####
+    #### Need to mock DataFrame and raise an IOError
+    ####
+
+    @patch('app.models.DataReader')
+    def test_fetch_ohlc_from_google_fails_gracefully_with_invalid_stock(self, mockDataReader):
+        mockDataReader.side_effect = IOError # raised when symbol isn't found
+        self.stock.symbol = 'This is an invalid symbol'
+        start = end = dt.date.today() - dt.timedelta(days=1)
+        df = self.stock.fetch_ohlc_from_google(start,end)
+        assert(df is None)
+
+    def test_saving_bad_df_to_database(self):
+        assert(Stock.query.count() == 0)
+        assert(StockPoint.query.count() == 0)
+        dti1 = DatetimeIndex([dt.date(2014,8,9)])[0]
+        df = DataFrame({'Date':[dti1],
+                        'Open':['-'],
+                        'High':['&'],
+                        'Low':['^'],
+                        'Close':[''],
+                        'Volume':[0]},
+                        index=[0])
+        self.stock.save_points(df)
+        assert(StockPoint.query.count() == 0)
+        assert(Stock.query.count() == 0)

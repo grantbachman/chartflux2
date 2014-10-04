@@ -14,8 +14,12 @@ class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = 'postgresql://' + username + ':' + \
                                 password + '@' + host + '/' + name
 
-class DevelopmentConfig(Config):
-    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/test.db'
+class TestingConfig(Config):
+    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/testing.db'
     DEBUG = True
-    TESTING = True
+
+class DevelopmentConfig(Config):
+    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/development.db'
+    DEBUG = True
+
 

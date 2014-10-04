@@ -5,5 +5,6 @@ node_modules/
 !.gitignore
 cover
 app/static/symbols/
+app/celerybeat-schedule.db
 TODO.md
 celerybeat-schedule.db
