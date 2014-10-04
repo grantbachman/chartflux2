@@ -4,6 +4,7 @@ import datetime as dt
 from app import db
 from sqlalchemy.sql.expression import desc
 
+
 class Stock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     symbol = db.Column(db.String(8))
@@ -20,8 +21,10 @@ class Stock(db.Model):
 
     def get_dataframe(self):
         if not self.stockpoints:
+            print('   No data found, pulling from Google')
             self.fetch_and_save_all_ohlc()
         else:
+            print('   Pulling data from local storage')
             self.fetch_and_save_missing_ohlc()
         return self.load_dataframe_from_db()
 
@@ -46,7 +49,11 @@ class Stock(db.Model):
                                   high=row['High'], low=row['Low'],
                                   close=row['Close'], volume=row['Volume'])
             self.stockpoints.append(newPoint)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except:
+            db.session.rollback()
+
 
 
     def fetch_and_save_missing_ohlc(self):
@@ -58,20 +65,29 @@ class Stock(db.Model):
         if next_point_date != dt.date.today():
             yesterday = dt.date.today() - dt.timedelta(days=1) # they never return today's data
             df = self.fetch_ohlc_from_google(next_point_date, yesterday)
-            self.save_points(df)               
+            if df is not None:
+                self.save_points(df)               
     
     def fetch_and_save_all_ohlc(self):
         ''' Fetches the model's maximum number of data points'''
         end_date = dt.date.today()
         start_date  = end_date - dt.timedelta(days = Stock.LOOKBACK_DAYS)
         df = self.fetch_ohlc_from_google(start_date, end_date)
-        self.save_points(df)
+        if df is not None:
+            self.save_points(df)
 
     def fetch_ohlc_from_google(self,start_date,end_date):
         ''' Fetches data for specified dates'''
-        df = DataReader(self.symbol, "google", start_date, end_date)
-        df.reset_index(inplace=True) # for saving the date
-        return df
+        try:
+            df = DataReader(self.symbol, "google", start_date, end_date)
+            ''' When using Google as a data source, the index name gets returned
+                prepended with a byte-order mark '\xef\xbb\xbfDate', so rename it '''
+        except IOError:   # Raised when symbol isn't found
+            return None
+        else:
+            df.index.name = 'Date'
+            df.reset_index(inplace=True) # for saving the date
+            return df
 
 class StockPoint(db.Model):
     id = db.Column(db.Integer, primary_key=True)

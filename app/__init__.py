@@ -7,6 +7,8 @@ app = Flask(__name__)
 
 if getenv('PRODUCTION_FLAG', None) is not None:
     app.config.from_object('app.config.ProductionConfig')
+elif getenv('TESTING_FLAG', None) is not None:
+    app.config.from_object('app.config.TestingConfig')
 else:
     app.config.from_object('app.config.DevelopmentConfig')
 
