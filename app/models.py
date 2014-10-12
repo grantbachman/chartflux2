@@ -2,29 +2,100 @@ from pandas.io.data import DataReader
 import pandas as pd
 import datetime as dt
 from app import db
-from sqlalchemy.sql.expression import desc
+from sqlalchemy.sql.expression import asc
 
+# datetime is implemented in C, which you can't patch. This is the 
+# easiest way (for me) to keep everything tested. Just replacing every call to
+# dt.date.today with today()
+def today():
+    return dt.date.today()
+
+class RSI(object):
+
+    OVERBOUGHT = 70
+    OVERSOLD = 30
+
+    def __init__(self,df):
+        self.df = df
+        self.calc_rsi()
+
+    @staticmethod
+    def find_buy_stocks():
+        ''' Returns a list of (StockPoint, Stock) tuples '''
+        return db.session.query(StockPoint, Stock).filter(StockPoint.stock_id == Stock.id).filter(StockPoint.rsi < RSI.OVERSOLD).filter(StockPoint.date == StockPoint.last_known_date()).all()
+
+    @staticmethod
+    def find_sell_stocks():
+        ''' Returns a list of (StockPoint, Stock) tuples '''
+        return db.session.query(StockPoint, Stock).filter(StockPoint.stock_id == Stock.id).filter(StockPoint.rsi > RSI.OVERBOUGHT).filter(StockPoint.date == StockPoint.last_known_date()).all()
+
+    '''
+    def is_buy_signal(self):
+        return self.df['RSI'][-1]
+    '''
+
+    def calc_rsi(self):
+        delta = self.df['Close'].diff()
+        rsiDF = pd.DataFrame({"Up" : delta, "Down" : delta})
+        rsiDF['Up'] = rsiDF['Up'][rsiDF['Up'] > 0]
+        rsiDF['Down'] = rsiDF['Down'][rsiDF['Down'] < 0]
+        rsiDF = rsiDF.fillna(value=0)
+        rsiDF['UpMean'] = pd.rolling_mean(rsiDF['Up'],14)
+        rsiDF['DownMean'] = pd.rolling_mean(rsiDF['Down'],14).abs()
+        rsiDF['RS'] = rsiDF['UpMean'] / rsiDF['DownMean']
+        rsiDF['RSI'] = 100 - (100/(1+rsiDF['RS']))
+        self.df['RSI'] = rsiDF['RSI']
 
 class Stock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     symbol = db.Column(db.String(8))
     name = db.Column(db.String(100))
     market = db.Column(db.String(10))    # could make this a category
-    stockpoints = db.relationship('StockPoint', order_by=desc('stock_point.date'))
+    stockpoints = db.relationship('StockPoint', order_by=asc('stock_point.date'))
 
-    LOOKBACK_DAYS = 300
+    LOOKBACK_DAYS = 20000  
 
     def __init__(self, symbol=symbol, name=name, market=market):
         self.symbol = symbol.upper()
         self.name = name
         self.market = market
 
+    def __repr__(self):
+        return "<Stock(id='%s', symbol='%s', name='%s', market='%s')>" % (
+            self.id, self.symbol, self.name, self.market)
+
+    @staticmethod
+    def find_buy_stocks():
+        rsi_stocks = RSI.find_buy_stocks()
+        return rsi_stocks
+
+    @staticmethod
+    def find_sell_stocks():
+        rsi_stocks = RSI.find_sell_stocks()
+        return rsi_stocks
+
+    def calculate_indicators(self):
+        print("Calculating indicators for %s" % (self.name,))
+        df = self.load_dataframe_from_db()
+        df = RSI(df).df
+        df.reset_index(inplace=True)
+        self._save_indicators(df)
+
+    def _save_indicators(self,df):
+        for row_index, row in df.iterrows():
+            self.stockpoints[row_index].rsi = df.loc[row_index]['RSI']
+        try:
+            db.session.commit()
+        except:
+            db.session.rollback()
+
+
     def get_dataframe(self):
         if not self.stockpoints:
-            print('   No data found, pulling from Google')
+            print('   No data found, pulling from Google.')
             self.fetch_and_save_all_ohlc()
         else:
-            print('   Pulling data from local storage')
+            print('   Pulling data from local storage and updating as needed.')
             self.fetch_and_save_missing_ohlc()
         return self.load_dataframe_from_db()
 
@@ -54,23 +125,22 @@ class Stock(db.Model):
         except:
             db.session.rollback()
 
-
-
     def fetch_and_save_missing_ohlc(self):
         '''
         Grabs the last point of the Stock's data to figure out for what 
         dates it needs to query. Then saves off the data in the Stock's table.
         '''
-        next_point_date = self.stockpoints[0].date + dt.timedelta(days=1)
-        if next_point_date != dt.date.today():
-            yesterday = dt.date.today() - dt.timedelta(days=1) # they never return today's data
+        next_point_date = self.stockpoints[-1].date + dt.timedelta(days=1)
+        if next_point_date.weekday() not in (5,6) and \
+        next_point_date != today():
+            yesterday = today() - dt.timedelta(days=1) 
             df = self.fetch_ohlc_from_google(next_point_date, yesterday)
             if df is not None:
                 self.save_points(df)               
     
     def fetch_and_save_all_ohlc(self):
         ''' Fetches the model's maximum number of data points'''
-        end_date = dt.date.today()
+        end_date = today()
         start_date  = end_date - dt.timedelta(days = Stock.LOOKBACK_DAYS)
         df = self.fetch_ohlc_from_google(start_date, end_date)
         if df is not None:
@@ -98,10 +168,19 @@ class StockPoint(db.Model):
     low =  db.Column(db.Float(precision=2,asdecimal=True))
     close =  db.Column(db.Float(precision=2,asdecimal=True))
     volume = db.Column(db.Integer)
+    rsi = db.Column(db.Float(precision=2,asdecimal=True))
+    macd = db.Column(db.Float(precision=2,asdecimal=True))
 
         
     def __init__(self, date=date, open=open, high=high,
                  low=low, close=close, volume=volume):
-        self.date, self.open, self.high, \
-        self.low, self.close, self.volume = date, open, high, low, close, volume
+        self.date, self.open, self.high, self.low, self.close, self.volume = date, open, high, low, close, volume
 
+    @staticmethod
+    def last_known_date():
+        return StockPoint.query.order_by(StockPoint.date.desc()).first().date
+
+    def __repr__(self):
+        return "<StockPoint(id='%s', stock_id='%s', date='%s', open='%s', \
+            high='%s', low='%s', close='%s', volume='%s', rsi='%s')>" % \
+            (self.id, self.stock_id, self.date, self.open, self.high, self.low, self.close, self.volume, self.rsi)

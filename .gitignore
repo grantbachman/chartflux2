@@ -5,6 +5,9 @@ node_modules/
 !.gitignore
 cover
 app/static/symbols/
-app/celerybeat-schedule.db
 TODO.md
 celerybeat-schedule.db
+
+# this is a ~100MB store of the markets from the past year.
+development.db.backup  
+
