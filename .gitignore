@@ -8,3 +8,7 @@ app/static/symbols/
 TODO.md
 celerybeat-schedule.db
 logs/
+app/config/development_config.py
+app/config/testing_config.py
+app/config/production_config.py
+

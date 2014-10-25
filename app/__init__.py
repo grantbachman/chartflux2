@@ -7,11 +7,11 @@ import logging
 #############  Load config files  #############################
 
 if getenv('PRODUCTION_FLAG', None) is not None:
-    app.config.from_object('app.config.ProductionConfig')
+    app.config.from_object('app.config.production_config')
 elif getenv('TESTING_FLAG', None) is not None:
-    app.config.from_object('app.config.TestingConfig')
+    app.config.from_object('app.config.testing_config')
 else:
-    app.config.from_object('app.config.DevelopmentConfig')
+    app.config.from_object('app.config.development_config')
 
 ###############################################################
 
