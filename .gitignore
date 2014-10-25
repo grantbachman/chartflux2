@@ -7,3 +7,4 @@ cover
 app/static/symbols/
 TODO.md
 celerybeat-schedule.db
+logs/
