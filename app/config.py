@@ -16,10 +16,17 @@ class ProductionConfig(Config):
 
 class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/testing.db'
+    TESTING = True
     DEBUG = True
 
 class DevelopmentConfig(Config):
-    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/development.db'
+    username = 'chartflux'
+    password = 'chartflux_password'
+    host = 'localhost'
+    name = 'chartflux'
+    port = '5432'
+    SQLALCHEMY_DATABASE_URI = 'postgresql://' + username + ':' + \
+                                password + '@' + host + '/' + name
     DEBUG = True
 
 

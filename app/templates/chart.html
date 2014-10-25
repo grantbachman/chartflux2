@@ -1,6 +1,38 @@
 {% extends "base.html" %}
 {% block body %}
 
-You entered: {{ symbol }}
+<div class="row">
+	<div class="col-md-12">
+		<h4>{{ point[1].name }}</h4>
+		
+		<div>
+			{{ change_tup[0] }}&nbsp({{ change_tup[1] }}%)
+		</div>
+		
+	</div>
+</div>
+<div class="row table-responsive">
+<div class="col-md-4">
+<table class="table table-bordered">
+	<tr>
+		<td>Open:&nbsp&nbsp{{ point[0].open }}</td>
+		<td>RSI:&nbsp&nbsp{{ point[0].rsi}}</td>
+	</tr>
+	<tr>
+		<td>High:&nbsp&nbsp{{ point[0].high }}</td>
+		<td>MACD:&nbsp&nbsp{{ point[0].macd}}</td>
+	</tr>
+	<tr>
+		<td>Low:&nbsp&nbsp{{ point[0].low }}</td>
+		<td>MACD Signal:&nbsp&nbsp{{ point[0].macd_signal}}</td>
+	</tr>
+	<tr>
+		<td>Close:&nbsp&nbsp{{ point[0].close }}</td>
+	</tr>
+</table>
+</div>
+</div>
+</div>
+
 
 {% endblock %}

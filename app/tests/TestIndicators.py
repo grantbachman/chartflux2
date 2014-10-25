@@ -1,9 +1,62 @@
 import unittest
 import datetime as dt
-from app.models import Stock, StockPoint, RSI
+from app.models import Stock, StockPoint, RSI, MACD
 from app import db
 from pandas import DataFrame, DatetimeIndex
 
+class TestMACD(unittest.TestCase):
+    
+    def setUp(self):
+        db.create_all()
+        self.stock = Stock(symbol='tsla',
+                           name='Tesla Motors Inc',
+                           market='NASDAQ')
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_MACD_columns_are_added(self):
+        close = [1,2,3,4,5,6,7,7,6,5,4,3,2,1]
+        days = 14
+        # Create a dataframe for the past 15 days
+        dtLst = DatetimeIndex([dt.date.today() - dt.timedelta(days=i) for i in range(days)])
+        df = DataFrame({'Date':list(dtLst),
+                        'Open':[1] * days,
+                        'High':[1] * days,
+                        'Low':[1] * days,
+                        'Close':close,
+                        'Volume':[1000000] * days},
+                        index=range(days))
+        self.stock.save_points(df)
+        df = self.stock.load_dataframe_from_db()
+        df = MACD(df).df
+        exception_raised = False
+        try:
+            macd = df['MACD']
+            macd_signal = df['MACD-Signal']
+        except:
+            exception_raised = True
+        assert(exception_raised == False)
+
+    def test_MACD_values_are_saved(self):
+        days = 30
+        close = [1,2,3,4,5,6,7,8,9,13,15,1,23,19,12,15,18,19,19,20,23,21,23,24,27,24,29,31,32,30]
+        dtLst = DatetimeIndex([dt.date.today() - dt.timedelta(days=days) + dt.timedelta(days=i) for i in range(days)])
+        dtLst = list(dtLst)
+        df = DataFrame({'Date': dtLst,
+                        'Open':[1] * days,
+                        'High':[1] * days,
+                        'Low':[1] * days,
+                        'Close':close,
+                        'Volume':[1000000] * days},
+                        index=range(days))
+        df2 = MACD(df).df
+        self.stock.save_points(df)
+        assert(len(self.stock.stockpoints) == days)
+        self.stock.calculate_indicators()
+        assert(self.stock.stockpoints[-1].macd is not None)
+        assert(self.stock.stockpoints[-1].macd_signal is not None)
+       
 
 class TestRSI(unittest.TestCase):
     

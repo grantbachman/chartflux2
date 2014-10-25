@@ -4,6 +4,30 @@ import datetime as dt
 from app import db
 from sqlalchemy.sql.expression import asc
 
+class MACD(object):
+
+    def __init__(self,df):
+        self.df = df
+        self.calc_macd()
+
+    @staticmethod
+    def find_buy_stocks():
+        ''' Returns a list of (StockPoint, Stock) tuples '''
+        return db.session.query(StockPoint, Stock).filter(StockPoint.stock_id == Stock.id).filter(StockPoint.rsi < RSI.OVERSOLD).filter(StockPoint.date == StockPoint.last_known_date()).all()
+
+    @staticmethod
+    def find_sell_stocks():
+        ''' Returns a list of (StockPoint, Stock) tuples '''
+        return db.session.query(StockPoint, Stock).filter(StockPoint.stock_id == Stock.id).filter(StockPoint.rsi > RSI.OVERBOUGHT).filter(StockPoint.date == StockPoint.last_known_date()).all()
+    
+    def calc_macd(self):
+        tempDF= pd.DataFrame({ 'Close' : self.df['Close']})
+        tempDF['EMA12'] = pd.ewma(tempDF['Close'], span=12)
+        tempDF['EMA26'] = pd.ewma(tempDF['Close'], span=26)
+        tempDF['MACD'] = tempDF['EMA12'] - tempDF['EMA26']
+        self.df['MACD-Signal'] = pd.ewma(tempDF['MACD'], span=9)
+        self.df['MACD'] = tempDF['MACD']
+
 # datetime is implemented in C, which you can't patch. This is the 
 # easiest way (for me) to keep everything tested. Just replacing every call to
 # dt.date.today with today()
@@ -67,23 +91,31 @@ class Stock(db.Model):
     @staticmethod
     def find_buy_stocks():
         rsi_stocks = RSI.find_buy_stocks()
+        macd_stocks = MACD.find_buy_stocks()
         return rsi_stocks
 
     @staticmethod
     def find_sell_stocks():
         rsi_stocks = RSI.find_sell_stocks()
+        macd_stocks = MACD.find_sell_stocks()
         return rsi_stocks
 
     def calculate_indicators(self):
         print("Calculating indicators for %s" % (self.name,))
         df = self.load_dataframe_from_db()
         df = RSI(df).df
+        df = MACD(df).df
         df.reset_index(inplace=True)
         self._save_indicators(df)
 
     def _save_indicators(self,df):
         for row_index, row in df.iterrows():
-            self.stockpoints[row_index].rsi = df.loc[row_index]['RSI']
+            if 'RSI' in df:
+                self.stockpoints[row_index].rsi = df.loc[row_index]['RSI']
+            if 'MACD' in df:
+                self.stockpoints[row_index].macd = df.loc[row_index]['MACD']
+            if 'MACD-Signal' in df:
+                self.stockpoints[row_index].macd_signal = df.loc[row_index]['MACD-Signal']
         try:
             db.session.commit()
         except:
@@ -170,6 +202,8 @@ class StockPoint(db.Model):
     volume = db.Column(db.Integer)
     rsi = db.Column(db.Float(precision=2,asdecimal=True))
     macd = db.Column(db.Float(precision=2,asdecimal=True))
+    macd_signal = db.Column(db.Float(precision=2,asdecimal=True))
+
 
         
     def __init__(self, date=date, open=open, high=high,

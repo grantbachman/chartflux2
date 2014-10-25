@@ -1,25 +1,44 @@
 import unittest
 from mock import patch
-import app
 import os
+import app
 
-class TestEnvironment(unittest.TestCase):
+class TestTestingEnvironment(unittest.TestCase):
+  
+    def setUp(self):
+        os.environ['TESTING_FLAG']='1'
+        reload(app)
+        self.db = app.db
 
-    def test_app_is_initialized(self):
-        assert(app.app is not None)
+    def tearDown(self):
+        del os.environ['TESTING_FLAG']
 
-    def test_db_is_initialized(self):
-        assert(app.db is not None)
+    def test_using_correct_db_engine(self):
+        assert('sqlite' in repr(self.db))
 
+class TestProductionConfig(unittest.TestCase):
 
-    '''
-    TODO: Learn how to test a module's __init__.py
-    
-    @patch('app.config.DevelopmentConfig')
-    @patch('app.config.ProductionConfig')
-    def test_is_not_production(self, MockProductionConfig,
-                               MockDevelopmentConfig):
-        testapp = app.test_client()
-        assert not MockProductionConfig.called
-        assert MockDevelopmentConfig.called
-    '''
+    def setUp(self):
+        os.environ['PRODUCTION_FLAG']='1'
+        reload(app)
+        self.db = app.db
+
+    def tearDown(self):
+        del os.environ['PRODUCTION_FLAG']
+
+    def test_using_correct_db_engine(self):
+        assert('postgres' in repr(self.db))
+
+class TestDevelopmentConfig(unittest.TestCase):
+
+    def setUp(self):
+        del os.environ['TESTING_FLAG']
+        reload(app)
+        self.db = app.db
+
+    def tearDown(self):
+        pass
+
+    def test_using_correct_db_engine(self):
+        print self.db
+        assert('postgresql://chartflux:chartflux_password' in repr(self.db))

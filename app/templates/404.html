@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+
+<div>
+	{% if error %}
+	{{ error.code}}:&nbsp&nbsp{{ error.description }}
+	{% else %}
+	Umm... Something went terribly, terribly wrong.
+	{% endif %}
+</div>
+
+{% endblock %}

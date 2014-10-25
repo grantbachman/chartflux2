@@ -2,6 +2,7 @@ from flask import Flask
 from os import path, getenv
 from flask.ext.sqlalchemy import SQLAlchemy
 app = Flask(__name__)
+import logging
 
 #############  Load config files  #############################
 
