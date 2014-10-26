@@ -15,7 +15,7 @@ celery.conf.CELERY_BACKEND = 'amqp'
 celery.conf.CELERY_TIMEZONE = 'UTC'
 
 # THIS IS UTC TIME, which is +4 hours of EST
-HOUR = 23
+HOUR = 16  
 MINUTE = 10
 
 # READ THIS...
