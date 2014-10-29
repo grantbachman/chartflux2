@@ -22,6 +22,7 @@ class TestStockPoint(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         self.stock.save_points(df)
@@ -44,7 +45,6 @@ class TestStockPoint(unittest.TestCase):
         assert(StockPoint.query.count() == 14)
         assert(StockPoint.last_known_date() == dt.date.today())
 
-
 class TestStock(unittest.TestCase):
     
     def setUp(self):
@@ -60,29 +60,24 @@ class TestStock(unittest.TestCase):
         " going for 100% test rage..."
         assert(self.stock.__repr__() == "<Stock(id='None', symbol='TSLA', name='Tesla Motors Inc', market='NASDAQ')>")
 
-    def test_db(self):
-        ''' using 'TESTING_FLAG' environment variable to know which DB.. There's
-        a better way to do this.'''
-        assert('tmp/testing.db' in str(db.engine))
-
     def test_init(self):
         assert(self.stock.symbol == "TSLA")
         assert(self.stock.name == "Tesla Motors Inc")
         assert(self.stock.market == "NASDAQ")
 
-    @patch('app.models.Stock.fetch_ohlc_from_google')
-    def test_fetch_all_ohlc_from_google(self,mock_fetch):   
+    @patch('app.models.Stock.fetch_ohlc_from_yahoo')
+    def test_fetch_all_ohlc_from_yahoo(self,mock_fetch):   
         df = self.stock.fetch_and_save_all_ohlc()
         end= dt.date.today()
         start = end - dt.timedelta(Stock.LOOKBACK_DAYS)
         mock_fetch.assert_called_with(start,end)
 
     @patch('app.models.DataReader')
-    def test_fetch_ohlc_from_google(self, MockDataReader):
+    def test_fetch_ohlc_from_yahoo(self, MockDataReader):
         end = dt.date.today()
         start = end - dt.timedelta(days=1)
-        df = self.stock.fetch_ohlc_from_google(start, end)
-        MockDataReader.assert_called_with("TSLA","google",start,end)
+        df = self.stock.fetch_ohlc_from_yahoo(start, end)
+        MockDataReader.assert_called_with("TSLA","yahoo",start,end)
 
     def test_save_points_creates_new_stock(self):
         assert(Stock.query.count() == 0)
@@ -97,6 +92,25 @@ class TestStock(unittest.TestCase):
         self.stock.save_points(df)
         assert(Stock.query.count() == 1)
 
+    def test_values_are_saved_and_returned(self):
+        date = dt.date.today()
+        dti = DatetimeIndex([date])[0]
+        df = DataFrame({'Date':[dti],
+                        'Open':[2.],
+                        'High':[3.],
+                        'Low':[1.],
+                        'Close':[3.25],
+                        'Adj Close':[2.25],
+                        'Volume':[1234567]},
+                        index=[0])
+        self.stock.save_points(df)
+        df = self.stock.load_dataframe_from_db()
+        assert(df.loc[date]['Open'] == 2)
+        assert(df.loc[date]['High'] == 3)
+        assert(df.loc[date]['Low'] == 1)
+        assert(df.loc[date]['Close'] == 3.25)
+        assert(df.loc[date]['Adj Close'] == 2.25)
+
     def test_save_points_creates_new_stockpoint(self): 
         assert(StockPoint.query.count() == 0)
         # Pandas initially creates DatetimeIndices, so replicate it.
@@ -106,6 +120,7 @@ class TestStock(unittest.TestCase):
                         'High':[3.],
                         'Low':[1.],
                         'Close':[2.53],
+                        'Adj Close':[2.53],
                         'Volume':[1234567]},
                         index=[0])
         self.stock.save_points(df)
@@ -123,6 +138,7 @@ class TestStock(unittest.TestCase):
                         'High':[3.],
                         'Low':[1.],
                         'Close':[2.53],
+                        'Adj Close':[2.53],
                         'Volume':[1234567]},
                         index=[0])
         self.stock.save_points(df)
@@ -130,7 +146,7 @@ class TestStock(unittest.TestCase):
         assert("<StockPoint(id='1', stock_id='1'" in repr)     
 
     @patch('app.models.today')
-    @patch('app.models.Stock.fetch_ohlc_from_google')
+    @patch('app.models.Stock.fetch_ohlc_from_yahoo')
     def test_fetch_and_save_missing_ohlc(self, mock_fetch, mock_today):
         
         mock_today.return_value = dt.date(2014,10,10)
@@ -143,6 +159,7 @@ class TestStock(unittest.TestCase):
                         'High':[3.,5.5],
                         'Low':[1.,1.5],
                         'Close':[2.53,4.25],
+                        'Adj Close':[2.53,4.25],
                         'Volume':[1234567,2345678]},
                         index=[0,1])
         self.stock.save_points(df)
@@ -165,6 +182,7 @@ class TestStock(unittest.TestCase):
                         'High':[3.,5.5],
                         'Low':[1.,1.5],
                         'Close':[2.53,4.25],
+                        'Adj Close':[2.53,4.25],
                         'Volume':[1234567,2345678]},
                         index=[0,1])
         self.stock.save_points(df)
@@ -181,6 +199,7 @@ class TestStock(unittest.TestCase):
                         'High':[3.,5.5],
                         'Low':[1.,1.5],
                         'Close':[2.53,4.25],
+                        'Adj Close':[2.53,4.25],
                         'Volume':[1234567,2345678]},
                         index=[0,1])
         self.stock.save_points(df)
@@ -190,11 +209,11 @@ class TestStock(unittest.TestCase):
         assert(df.loc[one_day_ago]['Close'] == 4.25)
 
     @patch('app.models.DataReader')
-    def test_fetch_ohlc_from_google_fails_gracefully_with_invalid_stock(self, mockDataReader):
+    def test_fetch_ohlc_from_yahoo_fails_gracefully_with_invalid_stock(self, mockDataReader):
         mockDataReader.side_effect = IOError # raised when symbol isn't found
         self.stock.symbol = 'This is an invalid symbol'
         start = end = dt.date.today() - dt.timedelta(days=1)
-        df = self.stock.fetch_ohlc_from_google(start,end)
+        df = self.stock.fetch_ohlc_from_yahoo(start,end)
         assert(df is None)
 
     def test_saving_bad_df_to_database(self):
@@ -206,6 +225,7 @@ class TestStock(unittest.TestCase):
                         'High':['&'],
                         'Low':['^'],
                         'Close':[''],
+                        'Adj Close':[''],
                         'Volume':[0]},
                         index=[0])
         self.stock.save_points(df)

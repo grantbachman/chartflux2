@@ -41,6 +41,7 @@ class TestViews(unittest.TestCase):
                         'High':[3.],
                         'Low':[1.],
                         'Close':[2.53],
+                        'Adj Close':[2.53],
                         'Volume':[1234567]},
                         index=[0])
         self.stock.save_points(df)
@@ -58,6 +59,7 @@ class TestViews(unittest.TestCase):
                         'High':[3.],
                         'Low':[1.],
                         'Close':[2.53],
+                        'Adj Close':[2.53],
                         'Volume':[1234567]},
                         index=[0])
         self.stock.save_points(df)

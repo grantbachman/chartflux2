@@ -124,7 +124,7 @@ class Stock(db.Model):
 
     def get_dataframe(self):
         if not self.stockpoints:
-            print('   No data found, pulling from Google.')
+            print('   No data found, pulling from Yahoo.')
             self.fetch_and_save_all_ohlc()
         else:
             print('   Pulling data from local storage and updating as needed.')
@@ -132,10 +132,10 @@ class Stock(db.Model):
         return self.load_dataframe_from_db()
 
     def load_dataframe_from_db(self):
-        df = pd.DataFrame(columns = ('Date','Open','High','Low','Close','Volume'))
+        df = pd.DataFrame(columns = ('Date','Open','High','Low','Close', 'Adj Close', 'Volume'))
         df.set_index(keys='Date', drop=True, inplace=True)
         for point in self.stockpoints:
-            df.loc[point.date] =[point.open,point.high,point.low,point.close,point.volume]
+            df.loc[point.date] =[point.open,point.high,point.low,point.close,point.adj_close,point.volume]
         return df
 
     def save_points(self,df): 
@@ -150,7 +150,8 @@ class Stock(db.Model):
             row['Date']=row['Date'].date()
             newPoint = StockPoint(date=row['Date'], open=row['Open'],
                                   high=row['High'], low=row['Low'],
-                                  close=row['Close'], volume=row['Volume'])
+                                  close=row['Close'], adj_close=row['Adj Close'],
+                                  volume=row['Volume'])
             self.stockpoints.append(newPoint)
         try:
             db.session.commit()
@@ -166,7 +167,7 @@ class Stock(db.Model):
         if next_point_date.weekday() not in (5,6) and \
         next_point_date != today():
             yesterday = today() - dt.timedelta(days=1) 
-            df = self.fetch_ohlc_from_google(next_point_date, yesterday)
+            df = self.fetch_ohlc_from_yahoo(next_point_date, yesterday)
             if df is not None:
                 self.save_points(df)               
     
@@ -174,14 +175,14 @@ class Stock(db.Model):
         ''' Fetches the model's maximum number of data points'''
         end_date = today()
         start_date  = end_date - dt.timedelta(days = Stock.LOOKBACK_DAYS)
-        df = self.fetch_ohlc_from_google(start_date, end_date)
+        df = self.fetch_ohlc_from_yahoo(start_date, end_date)
         if df is not None:
             self.save_points(df)
 
-    def fetch_ohlc_from_google(self,start_date,end_date):
+    def fetch_ohlc_from_yahoo(self,start_date,end_date):
         ''' Fetches data for specified dates'''
         try:
-            df = DataReader(self.symbol, "google", start_date, end_date)
+            df = DataReader(self.symbol, "yahoo", start_date, end_date)
             ''' When using Google as a data source, the index name gets returned
                 prepended with a byte-order mark '\xef\xbb\xbfDate', so rename it '''
         except IOError:   # Raised when symbol isn't found
@@ -198,17 +199,16 @@ class StockPoint(db.Model):
     open = db.Column(db.Float(precision=2,asdecimal=True))
     high = db.Column(db.Float(precision=2,asdecimal=True))
     low =  db.Column(db.Float(precision=2,asdecimal=True))
-    close =  db.Column(db.Float(precision=2,asdecimal=True))
+    close = db.Column(db.Float(precision=2,asdecimal=True))
+    adj_close = db.Column(db.Float(precision=2,asdecimal=True))
     volume = db.Column(db.Integer)
     rsi = db.Column(db.Float(precision=2,asdecimal=True))
     macd = db.Column(db.Float(precision=2,asdecimal=True))
     macd_signal = db.Column(db.Float(precision=2,asdecimal=True))
-
-
         
     def __init__(self, date=date, open=open, high=high,
-                 low=low, close=close, volume=volume):
-        self.date, self.open, self.high, self.low, self.close, self.volume = date, open, high, low, close, volume
+                 low=low, close=close, adj_close=adj_close, volume=volume):
+        self.date, self.open, self.high, self.low, self.close, self.adj_close, self.volume = date, open, high, low, close, adj_close, volume
 
     @staticmethod
     def last_known_date():
@@ -216,5 +216,5 @@ class StockPoint(db.Model):
 
     def __repr__(self):
         return "<StockPoint(id='%s', stock_id='%s', date='%s', open='%s', \
-            high='%s', low='%s', close='%s', volume='%s', rsi='%s')>" % \
-            (self.id, self.stock_id, self.date, self.open, self.high, self.low, self.close, self.volume, self.rsi)
+            high='%s', low='%s', close='%s', adj_close='%s', volume='%s', rsi='%s')>" % \
+            (self.id, self.stock_id, self.date, self.open, self.high, self.low, self.close, self.adj_close, self.volume, self.rsi)

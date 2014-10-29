@@ -31,6 +31,7 @@ def chart():
     change_percent = format((point[0].close - point[0].open)/point[0].open*100, '.2f')
     change_tup = tuple([change, change_percent])
     point[0].close = format(point[0].close,'.2f')
+    point[0].adj_close = format(point[0].adj_close,'.2f')
     point[0].open = format(point[0].open,'.2f')
     point[0].high = format(point[0].high,'.2f')
     point[0].low = format(point[0].low,'.2f')

@@ -25,6 +25,7 @@ class TestMACD(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         self.stock.save_points(df)
@@ -48,6 +49,7 @@ class TestMACD(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         df2 = MACD(df).df
@@ -80,6 +82,7 @@ class TestRSI(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         self.stock.save_points(df)
@@ -97,6 +100,7 @@ class TestRSI(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         self.stock.save_points(df)
@@ -115,6 +119,7 @@ class TestRSI(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         self.stock.save_points(df)
@@ -136,6 +141,7 @@ class TestRSI(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         self.stock.save_points(df)
@@ -156,6 +162,7 @@ class TestRSI(unittest.TestCase):
                         'High':[1] * days,
                         'Low':[1] * days,
                         'Close':close,
+                        'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
         self.stock.save_points(df)
