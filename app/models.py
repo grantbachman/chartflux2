@@ -124,10 +124,8 @@ class Stock(db.Model):
 
     def get_dataframe(self):
         if not self.stockpoints:
-            print('   No data found, pulling from Yahoo.')
             self.fetch_and_save_all_ohlc()
         else:
-            print('   Pulling data from local storage and updating as needed.')
             self.fetch_and_save_missing_ohlc()
         return self.load_dataframe_from_db()
 
@@ -138,21 +136,31 @@ class Stock(db.Model):
             df.loc[point.date] =[point.open,point.high,point.low,point.close,point.adj_close,point.volume]
         return df
 
-    def save_points(self,df): 
+    def _save_dataframe(self,df): 
         '''
+        Saves a dataframe
         If the stock doesn't exist, it creates it.
-        Blithely saves off the rows of a dataframe to the StockPoints table
         '''
         if Stock.query.filter(Stock.symbol==self.symbol,
                               Stock.market==self.market).count() == 0:
             db.session.add(self)
+        # get the index in which the date resides so we can skip it
+        # when checking the datatypes of the other columns
+        for index, row in enumerate(df.columns):
+            if row == 'Date': date_col_index = index
+
         for row_index, row in df.iterrows():
             row['Date']=row['Date'].date()
-            newPoint = StockPoint(date=row['Date'], open=row['Open'],
-                                  high=row['High'], low=row['Low'],
-                                  close=row['Close'], adj_close=row['Adj Close'],
-                                  volume=row['Volume'])
-            self.stockpoints.append(newPoint)
+            try:
+                [float(val) for index,val in enumerate(row) if index != date_col_index]
+            except:
+                pass
+            else:
+                newPoint = StockPoint(date=row['Date'], open=row['Open'],
+                                      high=row['High'], low=row['Low'],
+                                      close=row['Close'], adj_close=row['Adj Close'],
+                                      volume=row['Volume'])
+                self.stockpoints.append(newPoint)
         try:
             db.session.commit()
         except:
@@ -169,7 +177,7 @@ class Stock(db.Model):
             yesterday = today() - dt.timedelta(days=1) 
             df = self.fetch_ohlc_from_yahoo(next_point_date, yesterday)
             if df is not None:
-                self.save_points(df)               
+                self._save_dataframe(df)               
     
     def fetch_and_save_all_ohlc(self):
         ''' Fetches the model's maximum number of data points'''
@@ -177,7 +185,7 @@ class Stock(db.Model):
         start_date  = end_date - dt.timedelta(days = Stock.LOOKBACK_DAYS)
         df = self.fetch_ohlc_from_yahoo(start_date, end_date)
         if df is not None:
-            self.save_points(df)
+            self._save_dataframe(df)
 
     def fetch_ohlc_from_yahoo(self,start_date,end_date):
         ''' Fetches data for specified dates'''

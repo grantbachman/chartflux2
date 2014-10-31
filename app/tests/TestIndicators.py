@@ -28,7 +28,7 @@ class TestMACD(unittest.TestCase):
                         'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         df = self.stock.load_dataframe_from_db()
         df = MACD(df).df
         exception_raised = False
@@ -53,7 +53,7 @@ class TestMACD(unittest.TestCase):
                         'Volume':[1000000] * days},
                         index=range(days))
         df2 = MACD(df).df
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         assert(len(self.stock.stockpoints) == days)
         self.stock.calculate_indicators()
         assert(self.stock.stockpoints[-1].macd is not None)
@@ -85,7 +85,7 @@ class TestRSI(unittest.TestCase):
                         'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         df = self.stock.load_dataframe_from_db()
         df = RSI(df).df
         assert(df.ix[-1]['RSI'] == 50)
@@ -103,7 +103,7 @@ class TestRSI(unittest.TestCase):
                         'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         assert(len(self.stock.stockpoints) == 14)
         self.stock.calculate_indicators()
         assert(self.stock.stockpoints[0].rsi is None)
@@ -122,7 +122,7 @@ class TestRSI(unittest.TestCase):
                         'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         df = self.stock.load_dataframe_from_db()
         df = RSI(df).df
         df.reset_index(inplace=True)
@@ -144,7 +144,7 @@ class TestRSI(unittest.TestCase):
                         'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         self.stock.calculate_indicators()
         lst = RSI.find_sell_stocks()
         assert(isinstance(lst,list))
@@ -165,7 +165,7 @@ class TestRSI(unittest.TestCase):
                         'Adj Close':close,
                         'Volume':[1000000] * days},
                         index=range(days))
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         self.stock.calculate_indicators()
         lst = RSI.find_buy_stocks()
         assert(isinstance(lst,list))

@@ -76,16 +76,20 @@ def parse_nasdaq(market):
                 symbol = split[0]
                 name = split[1]
                 logging.info('Fetching data. Market: %s, Symbol: %s, Company Name: %s', market, symbol, name)
-                stock = Stock.query.filter(Stock.symbol == symbol,
-                                           Stock.market=='NASDAQ').first()
-                if stock is None:
-                    logging.info('New stock (not currently in our database): Market: %s, Symbol: %s, Company Name: %s', market, symbol, name)
-                    stock = Stock(symbol=symbol,name=name,market="NASDAQ")
-                df = stock.get_dataframe()
-                if len(df) == 0 :
-                    logging.warning('Error retrieving Stock from the database (DataFrame is empty...): Stock.id: %s, Market: %s, Symbol: %s, Company Name: %s', stock.id, market, symbol, name)
-                stock.calculate_indicators()
+                create_or_update_stock(symbol, name, market)
     logging.info('Finished parsing %s file.', market)
+
+def create_or_update_stock(symbol, name, market):
+    stock = Stock.query.filter(Stock.symbol == symbol,
+                               Stock.market=='NASDAQ').first()
+    if stock is None:
+        logging.info('New stock (not currently in our database): Market: %s, Symbol: %s, Company Name: %s', market, symbol, name)
+        stock = Stock(symbol=symbol,name=name,market="NASDAQ")
+    df = stock.get_dataframe()
+    if df is None or len(df) == 0 :
+        logging.warning('Error retrieving Stock from the database (DataFrame is empty...): Stock.id: %s, Market: %s, Symbol: %s, Company Name: %s', stock.id, market, symbol, name)
+    stock.calculate_indicators()
+
 
 @celery.task
 def calculate_indicators():
@@ -107,15 +111,11 @@ def parse_other(market):
                 symbol = split[7]
                 name = split[1]
                 logging.info('Fetching data. Market: %s, Symbol: %s, Company Name: %s', market, symbol, name)
-                stock = Stock.query.filter(Stock.symbol == symbol,
-                                           Stock.market==market).first()
+                create_or_update_stock(symbol, name, market)
                 if stock is None:
                     logging.info('New stock (not currently in our database): Market: %s, Symbol: %s, Company Name: %s', market, symbol, name)
                     stock = Stock(symbol=symbol,name=name,market=market)
                 df = stock.get_dataframe()
-                if df is None or len(df) == 0 :
-                    logging.warning('Error retrieving Stock from the database (DataFrame retrieve was either None or empty...): Stock.id: %s, Market: %s, Symbol: %s, Company Name: %s', stock.id, market, symbol, name)
-                stock.calculate_indicators()
     logging.info('Finished parsing %s file.', market)
 
 

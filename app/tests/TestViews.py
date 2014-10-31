@@ -44,7 +44,7 @@ class TestViews(unittest.TestCase):
                         'Adj Close':[2.53],
                         'Volume':[1234567]},
                         index=[0])
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         rv = self.app.get('/chart?symbol=TSLA')
         assert('404' not in rv.data)
 
@@ -62,7 +62,7 @@ class TestViews(unittest.TestCase):
                         'Adj Close':[2.53],
                         'Volume':[1234567]},
                         index=[0])
-        self.stock.save_points(df)
+        self.stock._save_dataframe(df)
         rv = self.app.get('/chart?symbol=TSLA')
         assert('N/A' in rv.data)
 
