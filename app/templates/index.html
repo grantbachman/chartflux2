@@ -10,10 +10,10 @@
 <div class="col-md-6">
 <table class="table table-condensed table-bordered table-striped">
 	<tr class="success"><td>Buying Recommendations</td></tr>
-	{% if buy_stocks|length > 0 %}
-	   {% for i in buy_stocks%}
-	   <tr><td>{% print "%s - %s." % (i[1].symbol, i[1].name) %}</td></tr>
-	   {% endfor %}
+    {% if buy_stocks is not none %}
+       {% for i in buy_stocks %}
+       <tr><td>{% print "%s - %s." % (i[1].symbol, i[1].name) %}</td></tr>
+       {% endfor %}
 	{% else %}
 	   <tr><td>I got nothin...</tr></td>
 	{% endif %}
@@ -22,10 +22,10 @@
 <div class="col-md-6">
 <table class="table table-condensed table-bordered table-striped">
 	<tr class="danger"><td>Selling Recommendations</td></tr>
-	{% if sell_stocks|length > 0 %}
-	   {% for i in sell_stocks%}
-	   <tr><td>{% print "%s - %s." % (i[1].symbol, i[1].name) %}</td></tr>
-	   {% endfor %}
+    {% if sell_stocks is not none %}
+       {% for i in sell_stocks %}
+       <tr><td>{% print "%s - %s." % (i[1].symbol, i[1].name) %}</td></tr>
+       {% endfor %}
 	{% else %}
 	   <tr><td>I got nothin...</tr></td>
 	{% endif %}

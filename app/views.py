@@ -1,5 +1,5 @@
 from app import app, db
-from app.models import Stock, StockPoint, RSI, today
+from app.models import Stock, StockPoint, today
 import datetime as dt
 import locale
 from flask import render_template, request, abort, jsonify
@@ -14,11 +14,10 @@ def page_not_found(e):
 def index():
     date = today() - dt.timedelta(days=1)
     try:
-        buy_stocks = Stock.find_buy_stocks()
-        sell_stocks = Stock.find_sell_stocks()
+        pass
     except:
         abort(404, 'Umm... We couldn\'t even generate the home page. That\'s bad.')
-    return render_template('index.html', buy_stocks=buy_stocks, sell_stocks=sell_stocks)
+    return render_template('index.html', buy_stocks=None, sell_stocks=None)
 
 @app.route('/chart')
 def chart():

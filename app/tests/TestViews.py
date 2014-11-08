@@ -5,6 +5,7 @@ from mock import patch
 from pandas import DataFrame, DatetimeIndex
 import datetime as dt
 
+"""
 class TestViews(unittest.TestCase):
     
     def setUp(self):
@@ -27,7 +28,7 @@ class TestViews(unittest.TestCase):
         assert('404' in rv.data)
 
     def test_chart_page_404(self):
-        ''' There's no data, so it should 404'''
+        # There's no data, so it should 404
         rv = self.app.get('/chart?symbol=TSLA')
         assert('404' in rv.data)
 
@@ -65,8 +66,4 @@ class TestViews(unittest.TestCase):
         self.stock._save_dataframe(df)
         rv = self.app.get('/chart?symbol=TSLA')
         assert('N/A' in rv.data)
-
-
-
-
-
+"""

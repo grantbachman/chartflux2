@@ -1,5 +1,9 @@
 venv
 node_modules/
+
+# ignore iPython Notebooks
+*.ipynb
+
 *.pyc
 .*
 !.gitignore
