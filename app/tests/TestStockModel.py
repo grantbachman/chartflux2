@@ -5,41 +5,29 @@ from app.models import Stock, StockPoint
 from app import app, db
 from mock import patch
 from pandas import DataFrame, DatetimeIndex
+import StockFactory as SF
 
 class TestStockPoint(unittest.TestCase):
     
     def setUp(self):
         db.create_all()
-        self.stock = Stock(symbol='tsla',
-                           name='Tesla Motors Inc',
-                           market='NASDAQ')
-        close = [1,2,3,4,5,6,7,7,6,5,4,3,2,1]
-        days = 14
-        # Create a dataframe for the past 15 days
-        dtLst = DatetimeIndex([dt.date.today() - dt.timedelta(days=i) for i in range(days)])
-        df = DataFrame({'Date':list(dtLst),
-                        'Open':[1] * days,
-                        'High':[1] * days,
-                        'Low':[1] * days,
-                        'Close':close,
-                        'Adj Close':close,
-                        'Volume':[1000000] * days},
-                        index=range(days))
+        self.stock = SF.build_stock()
+        df = SF.build_dataframe()
         self.stock._save_dataframe(df)
 
     def tearDown(self):
         db.drop_all()
 
     def test_save_dataframe_creates_new_stockpoints(self):
-        assert(StockPoint.query.filter(Stock.id == 1).count() == 14)
+        assert(StockPoint.query.filter(Stock.id == 1).count() == 10)
 
     def test_last_known_date(self):
-        assert(StockPoint.query.count() == 14)
+        assert(StockPoint.query.count() == 10)
         assert(StockPoint.last_known_date() == dt.date.today())
     
     def test_stockpoint_repr(self):
         print self.stock.stockpoints[0]
-        assert("<StockPoint(id='14', stock_id='1'" in self.stock.stockpoints[0].__repr__())
+        assert("<StockPoint(id='10', stock_id='1'" in self.stock.stockpoints[0].__repr__())
 
 
 class TestStock(unittest.TestCase):
@@ -79,28 +67,20 @@ class TestStock(unittest.TestCase):
 
     def test_load_dataframe_from_db(self):
         today = dt.date.today()
-        dti = DatetimeIndex([today])[0]
-        df = DataFrame({'Date':[dti],
-                        'Open':[2.],
-                        'High':[3.],
-                        'Low':[1.],
-                        'Close':[2.5],
-                        'Adj Close':[2.5],
-                        'Volume':[1234567]},
-                        index=[0])
+        df = SF.build_dataframe(days=1)
         self.stock._save_dataframe(df)
         df = self.stock.load_dataframe_from_db()
-        assert(df.loc[today]['Open'] == 2)
-        assert(df.loc[today]['High'] == 3)
+        assert(df.loc[today]['Open'] == 1)
+        assert(df.loc[today]['High'] == 1)
         assert(df.loc[today]['Low'] == 1)
-        assert(df.loc[today]['Close'] == 2.5)
-        assert(df.loc[today]['Adj Close'] == 2.5)
-        assert(df.loc[today]['Volume'] == 1234567)
+        assert(df.loc[today]['Close'] == 1)
+        assert(df.loc[today]['Adj Close'] == 1)
+        assert(df.loc[today]['Volume'] == 1)
 
     @patch('app.models.Stock.fetch_ohlc_from_yahoo')
     def test_fetch_all_ohlc_from_yahoo(self,mock_fetch):   
         df = self.stock.fetch_and_save_all_ohlc()
-        end= dt.date.today()
+        end = dt.date.today()
         start = end - dt.timedelta(Stock.LOOKBACK_DAYS)
         mock_fetch.assert_called_with(start,end)
 
@@ -130,18 +110,7 @@ class TestStock(unittest.TestCase):
     @patch('app.models.Stock.fetch_ohlc_from_yahoo')
     def test_fetch_and_save_missing_ohlc(self, mock_fetch, mock_today):
         mock_today.return_value = dt.date(2014,10,10)
-        date1 = dt.date(2014,10,6)
-        date2 = dt.date(2014,10,7)
-        dti1 = DatetimeIndex([date1])[0]
-        dti2 = DatetimeIndex([date2])[0]
-        df = DataFrame({'Date':[dti1,dti2],
-                        'Open':[2.,3.5],
-                        'High':[3.,5.5],
-                        'Low':[1.,1.5],
-                        'Close':[2.53,4.25],
-                        'Adj Close':[2.53,4.25],
-                        'Volume':[1234567,2345678]},
-                        index=[0,1])
+        df = SF.build_dataframe(end_date=dt.date(2014,10,7))
         self.stock._save_dataframe(df)
         self.stock.fetch_and_save_missing_ohlc()
         date3 = dt.date(2014,10,8)
@@ -155,7 +124,7 @@ class TestStock(unittest.TestCase):
         assert(mock_fetch_all.called)
         self.stock.stockpoints.append(StockPoint(date=dt.date.today,
                                                  open=1,high=2,low=1,close=1,
-                                                 adj_close=1,volume=10))
+                                                 adj_close=1,volume=1))
         self.stock.get_dataframe()
         assert(mock_fetch_missing.called)
 
@@ -168,19 +137,9 @@ class TestStock(unittest.TestCase):
         assert(df is None)
 
     def test_saving_bad_df_to_database(self):
-        ''' Should only save points with valid data '''
-        assert(Stock.query.count() == 0)
+        ''' Should only save the two points with valid data '''
         assert(StockPoint.query.count() == 0)
-        dti1 = DatetimeIndex([dt.date(2014,8,9)])[0]
-        dti2 = DatetimeIndex([dt.date(2014,8,10)])[0]
-        df = DataFrame({'Date':[dti1, dti2],
-                        'Open':[2, '-'],
-                        'High':[3, '-'],
-                        'Low':[1, '-'],
-                        'Close':[2,'-'],
-                        'Adj Close':[2,''],
-                        'Volume':[1,0]},
-                        index=[0,1])
+        df = SF.build_dataframe(values={'Open':['-',1,2]})
         self.stock._save_dataframe(df)
-        assert(StockPoint.query.count() == 1)
-        assert(Stock.query.count() == 1)
+        assert(StockPoint.query.count() == 2)
+

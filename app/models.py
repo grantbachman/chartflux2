@@ -4,17 +4,6 @@ import datetime as dt
 from app import db
 from sqlalchemy.sql.expression import asc
 
-'''
-class MACD():
-    def calc_macd(self):
-        tempDF= pd.DataFrame({ 'Close' : self.df['Close']})
-        tempDF['EMA12'] = pd.ewma(tempDF['Close'], span=12)
-        tempDF['EMA26'] = pd.ewma(tempDF['Close'], span=26)
-        tempDF['MACD'] = tempDF['EMA12'] - tempDF['EMA26']
-        self.df['MACD-Signal'] = pd.ewma(tempDF['MACD'], span=9)
-        self.df['MACD'] = tempDF['MACD']
-'''
-
 def today():
     ''' datetime is implemented in C, which you can't patch.
         This is the easiest way (for me) to keep everything tested.
@@ -52,8 +41,9 @@ class Stock(db.Model):
     def calculate_indicators(self):
         print("Calculating indicators for %s" % (self.name,))
         df = self.load_dataframe_from_db(reset_index=True)
+
+        df = RSI(df).calculate()
         rsi = RSISignal(df)
-        rsi.calculate()
         rsi.evaluate()
         if rsi.triggered() == True:
             num_points = len(self.stockpoints)
@@ -90,7 +80,8 @@ class Stock(db.Model):
         return df
 
     def _save_dataframe(self,df): 
-        ''' Saves a dataframe
+        ''' Saves a dataframe. The dataframe must have reset_index
+        called on it prior to saving.
         If the stock doesn't exist, it creates it.
         '''
         if Stock.query.filter(Stock.symbol==self.symbol,
@@ -176,9 +167,6 @@ class StockPoint(db.Model):
 
     # Each StockPoint (each day) can have a variable number of signals that have been triggered
     signals = db.relationship('Signal') 
-    # Store the number of signals for easier querying
-    num_buy_signals = db.Column(db.Integer, default=0)
-    num_sell_signals = db.Column(db.Integer, default=0)
         
     def __init__(self, date=date, open=open, high=high,
                  low=low, close=close, adj_close=adj_close, volume=volume):
@@ -229,35 +217,17 @@ class Signal(db.Model):
     def triggered(self):
         return self.is_buy_signal is not None
 
-
-    def calculate(self):
-        ''' This function calculates and sets any necessary data that's needed to determine
-        whether or not a stock currently qualifies for a given signal '''
-        pass
-    
     def evaluate(self):
         ''' This function evaluates a stock for the given signal, and if it qualifies, sets
         the "is_buy_signal" and "description" attributes. '''
         pass
 
-class RSISignal(Signal):
+class RSI(object):
 
-    __mapper_args__ = { 'polymorphic_identity' : 'rsi' }
-
-    OVERBOUGHT = 70
-    OVERSOLD = 30
-    LOOKBACK = 14  # Standard 14 Day look-back period, but can be altered to change signal sensitivity
+    LOOKBACK = 14  
 
     def __init__(self, df):
         self.df = df
-
-    def __repr__(self):
-        return "<RSISignal(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
-            " signal_type='%s', description='%s', RSISignal.OVERBOUGHT='%s'," \
-            " RSISignal.OVERSOLD='%s', RSISignal.LOOKBACK='%s')>" % \
-            (self.id, self.stock_point_id, self.is_buy_signal, \
-             self.signal_type, self.description, RSISignal.OVERBOUGHT, \
-             RSISignal.OVERSOLD, RSISignal.LOOKBACK)
 
     def calculate(self):
         rsi_df = pd.DataFrame( {'Change' : self.df['Adj Close'].diff(),
@@ -266,28 +236,57 @@ class RSISignal(Signal):
                                'Avg Gain': 0,
                                'Avg Loss': 0,
                                })
-        ''' Calculate the first Average Gain and Average Loss, which is the simple mean of Gains
-            and Losses for the first 14 datapoints with a Change (so, rows 1 thru 15). The
-            Average Loss is expressed as a positive value '''
+        ''' Calculate the first Average Gain and Average Loss, which is
+        the simple mean of Gains and Losses for the first 14 datapoints
+        with a Change (so, rows 1 thru 15). The Average Loss is
+        expressed as a positive value
+        '''
         rsi_df['Gain'] = rsi_df['Change'][rsi_df['Change'] > 0]
         rsi_df['Loss'] = rsi_df['Change'][rsi_df['Change'] < 0] * -1
         rsi_df = rsi_df.fillna(value=0)
-        rsi_df['Avg Gain'].ix[RSISignal.LOOKBACK] = rsi_df['Gain'][1:RSISignal.LOOKBACK+1].mean()
-        rsi_df['Avg Loss'].ix[RSISignal.LOOKBACK] = rsi_df['Loss'][1:RSISignal.LOOKBACK+1].mean()
+        rsi_df['Avg Gain'].ix[RSI.LOOKBACK] = \
+            rsi_df['Gain'][1:RSI.LOOKBACK+1].mean()
+        rsi_df['Avg Loss'].ix[RSI.LOOKBACK] = \
+            rsi_df['Loss'][1:RSI.LOOKBACK+1].mean()
 
-        ''' The rest of the Avg Gain/Avg Loss points use the following formula:
-            Average Gain = (previous_Avg_Gain * 13 + current_Gain) / 14 
-            Average Loss = (previous_Avg_Loss * 13 + current_Loss) /14
+        ''' The rest of the Avg Gain/Avg Loss points use the following
+        formula:
+        Average Gain = (previous_Avg_Gain * 13 + current_Gain) / 14 
+        Average Loss = (previous_Avg_Loss * 13 + current_Loss) /14
 
-            Note: I spent a good 2 hours trying to figure out a way to do this by pure dataframe
-            manipulation to no avail. Eventually, you just have to move on.''' 
+        Note: I spent a good 2 hours trying to figure out a way to do
+        this by pure dataframe manipulation, to no avail. Eventually,
+        you just have to move on.
+        '''
         for index, row in rsi_df.iterrows():
-            # using .ix[index] accesses the actual dataframe, using [index] just accesses a copy 
-            if index > RSISignal.LOOKBACK:
-                rsi_df['Avg Gain'].ix[index] = (rsi_df['Avg Gain'][index-1] * (RSISignal.LOOKBACK - 1) + rsi_df['Gain'][index]) / RSISignal.LOOKBACK
-                rsi_df['Avg Loss'].ix[index] = (rsi_df['Avg Loss'][index-1] * (RSISignal.LOOKBACK - 1) + rsi_df['Loss'][index]) / RSISignal.LOOKBACK 
+            ''' Using .ix[index] accesses the actual dataframe, using 
+            [index] just accesses a copy 
+            '''
+            if index > RSI.LOOKBACK:  
+                rsi_df['Avg Gain'].ix[index] = (rsi_df['Avg Gain'][index-1] * (RSI.LOOKBACK - 1) + rsi_df['Gain'][index]) / RSI.LOOKBACK
+                rsi_df['Avg Loss'].ix[index] = (rsi_df['Avg Loss'][index-1] * (RSI.LOOKBACK - 1) + rsi_df['Loss'][index]) / RSI.LOOKBACK 
         rsi_df['RS'] = rsi_df['Avg Gain'] / rsi_df['Avg Loss']
         self.df['RSI'] = 100 - (100 / (1 + rsi_df['RS']))
+        return self.df
+
+class RSISignal(Signal):
+
+    __mapper_args__ = {'polymorphic_identity' : 'rsi'}
+
+    OVERBOUGHT = 70
+    OVERSOLD = 30
+
+    def __init__(self, df):
+        self.df = df
+
+    def __repr__(self):
+        return "<RSISignal(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
+            " signal_type='%s', description='%s', RSISignal.OVERBOUGHT='%s'," \
+            " RSISignal.OVERSOLD='%s')>" % \
+            (self.id, self.stock_point_id, self.is_buy_signal, \
+             self.signal_type, self.description, RSISignal.OVERBOUGHT, \
+             RSISignal.OVERSOLD)
+
 
     def evaluate(self):
         ''' Checks the last row of the dataframe, which is the most
@@ -305,3 +304,26 @@ class RSISignal(Signal):
         else:
             pass
 
+'''
+class MACDSignal(Signal):
+
+    __mapper_args__ = {'polymorphic_identity': 'macd'}
+    
+    SLOW_SPAN = 26
+    FAST_SPAN = 12
+    SMOOTHING_SPAN = 9
+
+
+    def __init__(self, df):
+        self.df = df
+
+    def calculate(self):
+        tempDF= pd.DataFrame({ 'Adj Close' : self.df['Adj Close']})
+        tempDF['EMA12'] = pd.ewma(tempDF['Adj Close'],
+                                  span=MACDSignal.FAST_SPAN)
+        tempDF['EMA26'] = pd.ewma(tempDF['Adj Close'],
+                                  span=MACDSignal.SLOW_SPAN)
+        tempDF['MACD'] = tempDF['EMA12'] - tempDF['EMA26']
+        self.df['MACD-Signal'] = pd.ewma(tempDF['MACD'], span=)
+        self.df['MACD'] = tempDF['MACD']
+'''
