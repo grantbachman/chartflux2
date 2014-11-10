@@ -1,16 +1,119 @@
 import unittest
 import datetime as dt
-from app.models import Stock, StockPoint, Signal, RSI, RSISignal
+from app.models import Stock, StockPoint, Signal, RSI, RSISignal, MACD
+from app.models import MACDSignalLineCrossover, MACDCenterLineCrossover
 from app import db
 from pandas import DataFrame, DatetimeIndex, isnull
 from decimal import Decimal
 import StockFactory as SF
 
+    
+class TestMACD(unittest.TestCase):
+    def setUp(self):
+        db.create_all()
+        self.df = SF.build_dataframe(values={'Adj Close':[45.15, 46.26, 46.5,
+                                                          46.23, 46.08, 46.03,
+                                                          46.83, 47.69, 47.54,
+                                                          49.25, 49.23, 48.2,
+                                                          47.57, 47.61, 48.08,
+                                                          47.21, 46.76]})
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_MACD_correctness(self):    
+        ''' I'll do this later, but I'm not too concerned right now. '''
+        pass
+
+
+    def test_MACD_values_get_saved(self):
+        self.stock = SF.build_stock()
+        db.session.add(self.stock)
+        self.stock._save_dataframe(self.df)
+        self.df = MACD(self.df).calculate()
+        self.stock._save_indicators(self.df)
+        assert(self.stock.stockpoints[16].macd is not None)
+        assert(self.stock.stockpoints[16].macd_signal is not None)
+
+class TestMACDCenterLineCrossover(unittest.TestCase):
+    def setUp(self):
+        db.create_all()
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_buy_signal_triggers(self):
+        df = SF.build_dataframe(values={'MACD': [-.1, .1]})
+        signal = MACDCenterLineCrossover(df)
+        signal.evaluate()
+        print signal
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == True)
+        assert(signal.description is not None)
+
+    def test_sell_signal_triggers(self):
+        df = SF.build_dataframe(values={'MACD': [.1, -.1]})
+        signal = MACDCenterLineCrossover(df)
+        signal.evaluate()
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == False)
+        assert(signal.description is not None)
+
+    def test_no_signal_triggers(self):
+        df = SF.build_dataframe(values={'MACD': [.1, .2]})
+        signal = MACDCenterLineCrossover(df)
+        signal.evaluate()
+        assert(signal.triggered() == False)
+        assert(signal.is_buy_signal == None)
+        assert(signal.description is None)
+
+class TestMACDSignalLineCrossover(unittest.TestCase):
+    def setUp(self):
+        db.create_all()
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_buy_signal_triggers(self):
+        df = SF.build_dataframe(values={'MACD': [1.5,1.7],
+                                        'MACD-Signal': [1.6,1.65]})
+        signal = MACDSignalLineCrossover(df)
+        signal.evaluate()
+        print signal
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == True)
+        assert(signal.description is not None)
+
+    def test_sell_signal_triggers(self):
+        df = SF.build_dataframe(values={'MACD': [1.7,1.5],
+                                        'MACD-Signal': [1.6,1.65]})
+        signal = MACDSignalLineCrossover(df)
+        signal.evaluate()
+        print signal
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == False)
+        assert(signal.description is not None)
+
+    def test_no_signal_triggers(self):
+        df = SF.build_dataframe(values={'MACD': [1.5,1.6],
+                                        'MACD-Signal': [1.4,1.45]})
+        signal = MACDSignalLineCrossover(df)
+        signal.evaluate()
+        print signal
+        assert(signal.triggered() == False)
+        assert(signal.is_buy_signal == None)
+        assert(signal.description is None)
+
 class TestRSI(unittest.TestCase):
 
     def setUp(self):
         db.create_all()
-        self.df = SF.build_dataframe(values={'Adj Close':[45.15, 46.26, 46.5, 46.23, 46.08, 46.03, 46.83, 47.69, 47.54, 49.25, 49.23, 48.2, 47.57, 47.61, 48.08, 47.21, 46.76]})
+        self.df = SF.build_dataframe(values={'Adj Close':[45.15, 46.26, 46.5,
+                                                          46.23, 46.08, 46.03,
+                                                          46.83, 47.69, 47.54,
+                                                          49.25, 49.23, 48.2,
+                                                          47.57, 47.61, 48.08,
+                                                          47.21, 46.76]})
 
     def tearDown(self):
         db.drop_all()
@@ -29,7 +132,7 @@ class TestRSI(unittest.TestCase):
         self.stock = SF.build_stock()
         db.session.add(self.stock)
         self.stock._save_dataframe(self.df)
-        signal = RSI(self.df).calculate()
+        self.df = RSI(self.df).calculate()
         self.stock._save_indicators(self.df)
         assert(self.stock.stockpoints[16].rsi is not None)
         self.assertAlmostEqual(self.stock.stockpoints[16].rsi, Decimal(58.18), 2)
@@ -61,7 +164,7 @@ class TestSignal(unittest.TestCase):
         assert(isinstance(saved_signal, Signal))
         assert(saved_signal.is_buy_signal == True)
         assert(saved_signal.description == 'Generic Description')
-        assert(saved_signal.signal_type == 'generic')
+        assert(saved_signal.signal_type == 'Generic')
 
 class TestRSISignal(unittest.TestCase):
     
@@ -87,7 +190,7 @@ class TestRSISignal(unittest.TestCase):
         saved_signal = self.stock.stockpoints[0].signals[0]
         print(saved_signal)
         assert(saved_signal is not None)
-        assert(saved_signal.signal_type == 'rsi') 
+        assert(saved_signal.signal_type == 'RSI') 
         assert(saved_signal.is_buy_signal == False) 
         assert(saved_signal.description == 'RSI Description')
 

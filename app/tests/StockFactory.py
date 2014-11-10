@@ -58,8 +58,11 @@ def build_dataframe(days=10, fill_value=1., values={}, end_date=dt.date.today(),
         else:
             values[i] = [fill_value] * days
 
-    values['Date'] = DatetimeIndex([end_date - dt.timedelta(days=i)
-                                     for i in range(days)])
+    dateList = [end_date - dt.timedelta(days=i) for i in range(days)]
+    # necessary so the dataframe flows from oldest to most recent when
+    # read from top to bottom, like DataReader
+    dateList.reverse()  
+    values['Date'] = DatetimeIndex(dateList)
     df = DataFrame(values, index=range(days))
     if date_index == True:
         df.set_index(keys='Date', drop=True, inplace=True)

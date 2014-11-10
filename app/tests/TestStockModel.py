@@ -27,7 +27,7 @@ class TestStockPoint(unittest.TestCase):
     
     def test_stockpoint_repr(self):
         print self.stock.stockpoints[0]
-        assert("<StockPoint(id='10', stock_id='1'" in self.stock.stockpoints[0].__repr__())
+        assert("<StockPoint(id='1', stock_id='1'" in self.stock.stockpoints[0].__repr__())
 
 
 class TestStock(unittest.TestCase):
@@ -142,4 +142,3 @@ class TestStock(unittest.TestCase):
         df = SF.build_dataframe(values={'Open':['-',1,2]})
         self.stock._save_dataframe(df)
         assert(StockPoint.query.count() == 2)
-

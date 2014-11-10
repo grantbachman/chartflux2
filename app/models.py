@@ -203,7 +203,7 @@ class Signal(db.Model):
 
     ''' Enables this table to store multiple classes of information (signals)
     with the type of class being stored in the "signal_type" column '''
-    __mapper_args__ = { 'polymorphic_on' : 'signal_type', 'polymorphic_identity' : 'generic' }
+    __mapper_args__ = { 'polymorphic_on' : 'signal_type', 'polymorphic_identity' : 'Generic' }
 
     def __init__(self):
         pass
@@ -215,11 +215,16 @@ class Signal(db.Model):
              self.signal_type, self.description)
 
     def triggered(self):
+        ''' We only store an is_buy_signal column as also including an
+        is_sell_signal would be redundant.
+        '''
         return self.is_buy_signal is not None
 
     def evaluate(self):
-        ''' This function evaluates a stock for the given signal, and if it qualifies, sets
-        the "is_buy_signal" and "description" attributes. '''
+        ''' This function evaluates a stock for the given signal, and
+        if it qualifies, sets the "is_buy_signal" and "description" 
+        attributes. Each signal has an evaluate method
+        '''
         pass
 
 class RSI(object):
@@ -271,7 +276,7 @@ class RSI(object):
 
 class RSISignal(Signal):
 
-    __mapper_args__ = {'polymorphic_identity' : 'rsi'}
+    __mapper_args__ = {'polymorphic_identity' : 'RSI'}
 
     OVERBOUGHT = 70
     OVERSOLD = 30
@@ -304,26 +309,95 @@ class RSISignal(Signal):
         else:
             pass
 
-'''
-class MACDSignal(Signal):
+class MACD(object):
 
-    __mapper_args__ = {'polymorphic_identity': 'macd'}
-    
     SLOW_SPAN = 26
     FAST_SPAN = 12
     SMOOTHING_SPAN = 9
-
 
     def __init__(self, df):
         self.df = df
 
     def calculate(self):
         tempDF= pd.DataFrame({ 'Adj Close' : self.df['Adj Close']})
-        tempDF['EMA12'] = pd.ewma(tempDF['Adj Close'],
-                                  span=MACDSignal.FAST_SPAN)
-        tempDF['EMA26'] = pd.ewma(tempDF['Adj Close'],
-                                  span=MACDSignal.SLOW_SPAN)
-        tempDF['MACD'] = tempDF['EMA12'] - tempDF['EMA26']
-        self.df['MACD-Signal'] = pd.ewma(tempDF['MACD'], span=)
+        tempDF['FAST'] = pd.ewma(tempDF['Adj Close'],
+                                  span=MACD.FAST_SPAN)
+        tempDF['SLOW'] = pd.ewma(tempDF['Adj Close'],
+                                  span=MACD.SLOW_SPAN)
+        tempDF['MACD'] = tempDF['FAST'] - tempDF['SLOW']
+        self.df['MACD-Signal'] = pd.ewma(tempDF['MACD'], span=MACD.SMOOTHING_SPAN)
         self.df['MACD'] = tempDF['MACD']
-'''
+        return self.df
+
+class MACDSignalLineCrossover(Signal):
+    
+    __mapper_args__ = {'polymorphic_identity': 'MACD-Signal-Line-Crossover'}
+
+    def __init__(self, df):
+        self.df = df
+
+    def __repr__(self):
+        return "<MACDSignalLineCrossover(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
+            " signal_type='%s', description='%s')>" % \
+            (self.id, self.stock_point_id, self.is_buy_signal, \
+             self.signal_type, self.description)
+
+    def evaluate(self):
+        ''' If the MACD crosses the MACD-Signal line in the last two 
+        datapoints, then it qualifies for the signal.
+        
+        Bullish: MACD turns up and crosses above the Signal Line
+        Bearish: MACD turns down and crosses below the Signal Line
+        '''
+        # Create a dict of the values to evaluate for cleaner code
+        last = {'MACD': list(self.df['MACD'][len(self.df)-2:]),
+                'Signal': list(self.df['MACD-Signal'][len(self.df)-2:])
+                }
+
+        if last['MACD'][0] <= last['Signal'][0] and \
+                last['MACD'][1] > last['Signal'][1]:
+            self.is_buy_signal = True
+            self.description = "MACD (%s) just turned above the Signal Line" \
+                " (%s)" % (last['MACD'][1], last['Signal'][1])
+        elif last['MACD'][0] >= last['Signal'][0] and \
+                last['MACD'][1] < last['Signal'][1]:
+            self.is_buy_signal = False 
+            self.description = "MACD (%s) just turned below the Signal Line" \
+                " (%s)" % (last['MACD'][1], last['Signal'][1])
+        else:
+            pass
+
+class MACDCenterLineCrossover(Signal):
+    
+    __mapper_args__ = {'polymorphic_identity': 'MACD-Center-Line-Crossover'}
+
+    def __init__(self, df):
+        self.df = df
+
+    def __repr__(self):
+        return "<MACDCenterLineCrossover(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
+            " signal_type='%s', description='%s')>" % \
+            (self.id, self.stock_point_id, self.is_buy_signal, \
+             self.signal_type, self.description)
+
+    def evaluate(self):
+        ''' If the MACD goes from positive to negative in the last two
+        datapoints or vice versa, then it qualifies for the signal.
+        
+        Bullish: MACD turns positive
+        Bearish: MACD turns negative
+        '''
+        # could be a list, but keeping a dict for consistency's sake with
+        # the MACD signals
+        last = {'MACD': list(self.df['MACD'][len(self.df)-2:])}
+
+        if last['MACD'][0] <= 0 and last['MACD'][1] > 0:
+            self.is_buy_signal = True
+            self.description = "MACD (%s) just turned positive" % \
+                last['MACD'][1]
+        elif last['MACD'][0] >=  0 and last['MACD'][1] < 0:
+            self.is_buy_signal = False 
+            self.description = "MACD (%s) just turned negative" % \
+                last['MACD'][1]
+        else:
+            pass
