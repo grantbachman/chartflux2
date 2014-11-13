@@ -80,7 +80,7 @@ class Stock(db.Model):
         return df
 
     def _save_dataframe(self,df): 
-        ''' Saves a dataframe. The dataframe must have reset_index
+        ''' Saves a dataframe and all it's columns. The dataframe must have reset_index
         called on it prior to saving.
         If the stock doesn't exist, it creates it.
         '''
@@ -329,18 +329,29 @@ class MACD(object):
         self.df['MACD'] = tempDF['MACD']
         return self.df
 
-class MACDSignalLineCrossover(Signal):
+class MACDSignalCross(Signal):
     
     __mapper_args__ = {'polymorphic_identity': 'MACD-Signal-Line-Crossover'}
+
+    # Min number of days MACD must be on one side before crossing
+    BEFORE = 4 
+    # After crossing, min number of days it must stay on that side before the
+    # signal fires 
+    AFTER = 1
+    DATA_REQ = BEFORE + AFTER  # Data Requirements 
 
     def __init__(self, df):
         self.df = df
 
     def __repr__(self):
-        return "<MACDSignalLineCrossover(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
+        return "<MACDSignalCross(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
             " signal_type='%s', description='%s')>" % \
             (self.id, self.stock_point_id, self.is_buy_signal, \
              self.signal_type, self.description)
+
+    def may_evaluate(self):
+        ''' Returns whether there is enough data to do an analysis '''
+        return len(self.df['MACD']) >= MACDCenterCross.DATA_REQ
 
     def evaluate(self):
         ''' If the MACD crosses the MACD-Signal line in the last two 
@@ -349,37 +360,57 @@ class MACDSignalLineCrossover(Signal):
         Bullish: MACD turns up and crosses above the Signal Line
         Bearish: MACD turns down and crosses below the Signal Line
         '''
-        # Create a dict of the values to evaluate for cleaner code
-        last = {'MACD': list(self.df['MACD'][len(self.df)-2:]),
-                'Signal': list(self.df['MACD-Signal'][len(self.df)-2:])
-                }
 
-        if last['MACD'][0] <= last['Signal'][0] and \
-                last['MACD'][1] > last['Signal'][1]:
+        # Check if we can safely evalute without getting KeyErrors
+        if not self.may_evaluate():
+            return
+
+        # check to ensure only the most recent day (of the past 5) has
+        # broken the threshold to help prevent thrashing.
+        last = self.df[['MACD','MACD-Signal']][len(self.df)-MACDSignalCross.DATA_REQ:]
+
+        if (last['MACD'][:MACDSignalCross.BEFORE] <= \
+            last['MACD-Signal'][:MACDSignalCross.BEFORE]).all() and \
+           (last['MACD'][MACDSignalCross.BEFORE:] > \
+            last['MACD-Signal'][MACDSignalCross.BEFORE:]).all():
             self.is_buy_signal = True
             self.description = "MACD (%s) just turned above the Signal Line" \
-                " (%s)" % (last['MACD'][1], last['Signal'][1])
-        elif last['MACD'][0] >= last['Signal'][0] and \
-                last['MACD'][1] < last['Signal'][1]:
+                " (%s)" % (last['MACD'].iloc[-1], last['MACD-Signal'].iloc[-1])
+        if (last['MACD'][:MACDSignalCross.BEFORE] >= \
+            last['MACD-Signal'][:MACDSignalCross.BEFORE]).all() and \
+           (last['MACD'][MACDSignalCross.BEFORE:] < \
+            last['MACD-Signal'][MACDSignalCross.BEFORE:]).all():
             self.is_buy_signal = False 
-            self.description = "MACD (%s) just turned below the Signal Line" \
-                " (%s)" % (last['MACD'][1], last['Signal'][1])
+            self.description = "MACD (%s) just dropped below the Signal Line" \
+                " (%s)" % (last['MACD'].iloc[-1], last['MACD-Signal'].iloc[-1])
         else:
             pass
 
-class MACDCenterLineCrossover(Signal):
+class MACDCenterCross(Signal):
     
     __mapper_args__ = {'polymorphic_identity': 'MACD-Center-Line-Crossover'}
+
+    # Min number of days MACD must be on one side before crossing
+    BEFORE = 4 
+    # After crossing, min number of days it must stay on that side before the
+    # signal fires 
+    AFTER = 1
+    DATA_REQ = BEFORE + AFTER  # Data Requirements 
 
     def __init__(self, df):
         self.df = df
 
     def __repr__(self):
-        return "<MACDCenterLineCrossover(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
-            " signal_type='%s', description='%s')>" % \
+        return "<MACDCenterCross(id='%s', stock_point_id='%s', " \
+            "is_buy_signal='%s', signal_type='%s', description='%s')>" % \
             (self.id, self.stock_point_id, self.is_buy_signal, \
              self.signal_type, self.description)
 
+    def may_evaluate(self):
+        ''' Returns whether there is enough data to do an analysis '''
+        return len(self.df['MACD']) >= MACDCenterCross.DATA_REQ
+
+    
     def evaluate(self):
         ''' If the MACD goes from positive to negative in the last two
         datapoints or vice versa, then it qualifies for the signal.
@@ -387,17 +418,19 @@ class MACDCenterLineCrossover(Signal):
         Bullish: MACD turns positive
         Bearish: MACD turns negative
         '''
-        # could be a list, but keeping a dict for consistency's sake with
-        # the MACD signals
-        last = {'MACD': list(self.df['MACD'][len(self.df)-2:])}
+        # Check if we can safely evalute without getting KeyErrors
+        if not self.may_evaluate():
+            return
 
-        if last['MACD'][0] <= 0 and last['MACD'][1] > 0:
+        last = self.df['MACD'][len(self.df)-MACDCenterCross.DATA_REQ:]
+
+        if (last[:MACDCenterCross.BEFORE] <= 0).all() and \
+                (last[MACDCenterCross.BEFORE:] > 0).all():
             self.is_buy_signal = True
-            self.description = "MACD (%s) just turned positive" % \
-                last['MACD'][1]
-        elif last['MACD'][0] >=  0 and last['MACD'][1] < 0:
+            self.description = "MACD (%s) just turned positive" % last.iloc[-1]
+        elif (last[:MACDCenterCross.BEFORE] >= 0).all() and \
+                (last[MACDCenterCross.BEFORE:] < 0).all():
             self.is_buy_signal = False 
-            self.description = "MACD (%s) just turned negative" % \
-                last['MACD'][1]
+            self.description = "MACD (%s) just turned negative" % last.iloc[-1]
         else:
             pass

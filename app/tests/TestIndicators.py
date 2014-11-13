@@ -1,7 +1,7 @@
 import unittest
 import datetime as dt
 from app.models import Stock, StockPoint, Signal, RSI, RSISignal, MACD
-from app.models import MACDSignalLineCrossover, MACDCenterLineCrossover
+from app.models import MACDSignalCross, MACDCenterCross
 from app import db
 from pandas import DataFrame, DatetimeIndex, isnull
 from decimal import Decimal
@@ -25,7 +25,6 @@ class TestMACD(unittest.TestCase):
         ''' I'll do this later, but I'm not too concerned right now. '''
         pass
 
-
     def test_MACD_values_get_saved(self):
         self.stock = SF.build_stock()
         db.session.add(self.stock)
@@ -35,7 +34,7 @@ class TestMACD(unittest.TestCase):
         assert(self.stock.stockpoints[16].macd is not None)
         assert(self.stock.stockpoints[16].macd_signal is not None)
 
-class TestMACDCenterLineCrossover(unittest.TestCase):
+class TestMACDCenterCross(unittest.TestCase):
     def setUp(self):
         db.create_all()
 
@@ -43,31 +42,38 @@ class TestMACDCenterLineCrossover(unittest.TestCase):
         db.drop_all()
 
     def test_buy_signal_triggers(self):
-        df = SF.build_dataframe(values={'MACD': [-.1, .1]})
-        signal = MACDCenterLineCrossover(df)
+        df = SF.build_dataframe(values={'MACD':[-1,-.8,-.5,-.003,.01]})
+        signal = MACDCenterCross(df)
         signal.evaluate()
-        print signal
         assert(signal.triggered() == True)
         assert(signal.is_buy_signal == True)
         assert(signal.description is not None)
 
     def test_sell_signal_triggers(self):
-        df = SF.build_dataframe(values={'MACD': [.1, -.1]})
-        signal = MACDCenterLineCrossover(df)
+        df = SF.build_dataframe(values={'MACD':[1,.8,.5,.003,-.01]})
+        signal = MACDCenterCross(df)
         signal.evaluate()
         assert(signal.triggered() == True)
         assert(signal.is_buy_signal == False)
         assert(signal.description is not None)
 
     def test_no_signal_triggers(self):
-        df = SF.build_dataframe(values={'MACD': [.1, .2]})
-        signal = MACDCenterLineCrossover(df)
+        df = SF.build_dataframe(values={'MACD':[1,.8,.5,.003,.01]})
+        signal = MACDCenterCross(df)
         signal.evaluate()
         assert(signal.triggered() == False)
         assert(signal.is_buy_signal == None)
         assert(signal.description is None)
 
-class TestMACDSignalLineCrossover(unittest.TestCase):
+    def test_no_error_thrown_with_little_data(self):
+        df = SF.build_dataframe(values={'MACD':[None] * 2})
+        signal = MACDCenterCross(df)
+        signal.evaluate()
+        assert(signal.triggered() == False)
+        assert(signal.is_buy_signal == None)
+        assert(signal.description is None)
+
+class TestMACDSignalCross(unittest.TestCase):
     def setUp(self):
         db.create_all()
 
@@ -75,9 +81,9 @@ class TestMACDSignalLineCrossover(unittest.TestCase):
         db.drop_all()
 
     def test_buy_signal_triggers(self):
-        df = SF.build_dataframe(values={'MACD': [1.5,1.7],
-                                        'MACD-Signal': [1.6,1.65]})
-        signal = MACDSignalLineCrossover(df)
+        df = SF.build_dataframe(values={'MACD':[-1,-.8,-.5,-.003,.01],
+                                        'MACD-Signal':[.5,.4,.3,.2,0]})
+        signal = MACDSignalCross(df)
         signal.evaluate()
         print signal
         assert(signal.triggered() == True)
@@ -85,9 +91,9 @@ class TestMACDSignalLineCrossover(unittest.TestCase):
         assert(signal.description is not None)
 
     def test_sell_signal_triggers(self):
-        df = SF.build_dataframe(values={'MACD': [1.7,1.5],
-                                        'MACD-Signal': [1.6,1.65]})
-        signal = MACDSignalLineCrossover(df)
+        df = SF.build_dataframe(values={'MACD':[1,.8,.5,.003,-.01],
+                                        'MACD-Signal':[-.5,-.4,-.3,-.2,0]})
+        signal = MACDSignalCross(df)
         signal.evaluate()
         print signal
         assert(signal.triggered() == True)
@@ -95,9 +101,9 @@ class TestMACDSignalLineCrossover(unittest.TestCase):
         assert(signal.description is not None)
 
     def test_no_signal_triggers(self):
-        df = SF.build_dataframe(values={'MACD': [1.5,1.6],
-                                        'MACD-Signal': [1.4,1.45]})
-        signal = MACDSignalLineCrossover(df)
+        df = SF.build_dataframe(values={'MACD':[1,.8,.5,.003,.001],
+                                        'MACD-Signal':[.5,.4,.3,.002,0]})
+        signal = MACDSignalCross(df)
         signal.evaluate()
         print signal
         assert(signal.triggered() == False)
