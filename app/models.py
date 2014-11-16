@@ -2,7 +2,8 @@ from pandas.io.data import DataReader
 import pandas as pd
 import datetime as dt
 from app import db
-from sqlalchemy.sql.expression import asc
+from sqlalchemy.sql.expression import asc, desc
+from sqlalchemy.ext.orderinglist import ordering_list
 
 def today():
     ''' datetime is implemented in C, which you can't patch.
@@ -18,6 +19,7 @@ class Stock(db.Model):
     name = db.Column(db.String(100))
     market = db.Column(db.String(10))    # could make this a category
     stockpoints = db.relationship('StockPoint', order_by=asc('stock_point.date'))
+    signals = db.relationship('Signal', order_by=desc('signal.expiration_date'))
 
     LOOKBACK_DAYS = 20000  
 
@@ -39,15 +41,24 @@ class Stock(db.Model):
         return None
 
     def calculate_indicators(self):
-        print("Calculating indicators for %s" % (self.name,))
         df = self.load_dataframe_from_db()
-
         df = RSI(df).calculate()
-        rsi = RSISignal(df)
-        rsi.evaluate()
-        if rsi.triggered() == True:
-            num_points = len(self.stockpoints)
-            self.stockpoints[num_points-1].signals.append(rsi)
+        df = MACD(df).calculate()
+        rsi_signal = RSISignal(df)
+        rsi_signal.evaluate()
+        if rsi_signal.triggered() == True:
+            print "Triggering RSI signal"
+            self.signals.append(rsi_signal)
+        macd_center_cross_signal = MACDCenterCross(df)
+        macd_center_cross_signal.evaluate()
+        if macd_center_cross_signal.triggered() == True:
+            print "Triggering MACD Center signal"
+            self.signals.append(macd_center_cross_signal)
+        macd_signal_cross_signal= MACDSignalCross(df)
+        macd_signal_cross_signal.evaluate()
+        if macd_signal_cross_signal.triggered() == True:
+            print "Triggering MACD Signal signal"
+            self.signals.append(macd_signal_cross_signal)
         self.update_dataframe(df) # saves new df columns and any new signals
 
     def update_dataframe(self,df):
@@ -170,21 +181,17 @@ class StockPoint(db.Model):
     id = db.Column(db.Integer, primary_key=True, nullable=False)
     stock_id = db.Column(db.Integer, db.ForeignKey('stock.id'), nullable=False)
     date = db.Column(db.Date, nullable=False)
-    open = db.Column(db.Float(precision=2,asdecimal=True), nullable=False)
-    high = db.Column(db.Float(precision=2,asdecimal=True), nullable=False)
-    low =  db.Column(db.Float(precision=2,asdecimal=True), nullable=False)
-    close = db.Column(db.Float(precision=2,asdecimal=True), nullable=False)
-    adj_close = db.Column(db.Float(precision=2,asdecimal=True), nullable=False)
+    open = db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
+    high = db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
+    low =  db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
+    close = db.Column(db.Float(precision=2 ,asdecimal=True), nullable=False)
+    adj_close = db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
     volume = db.Column(db.Integer, nullable=False)
-    rsi = db.Column(db.Float(precision=2,asdecimal=True), nullable=True)
+    rsi = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
 
     # stores the current MACD values (MACD and the MACD-Signal line)
-    macd = db.Column(db.Float(precision=2,asdecimal=True))
-    macd_signal = db.Column(db.Float(precision=2,asdecimal=True))
-
-    # Each StockPoint (each day) can have a variable number of signals that
-    # have been triggered
-    signals = db.relationship('Signal') 
+    macd = db.Column(db.Float(precision=2, asdecimal=True))
+    macd_signal = db.Column(db.Float(precision=2, asdecimal=True))
         
     def __init__(self, date, open, high, low, close, adj_close, volume,
                  rsi=None, macd=None, macd_signal=None):
@@ -219,8 +226,15 @@ class Signal(db.Model):
     
     __tablename__ = 'signal'
     
+    WEIGHT = 0.5
+    EXPIRATION_DAYS = 5
     id = db.Column(db.Integer, primary_key=True)
-    stock_point_id = db.Column(db.Integer, db.ForeignKey('stock_point.id'))
+    stock_id = db.Column(db.Integer, db.ForeignKey('stock.id'))
+    expiration_date = db.Column(db.Date, nullable=False)
+    created_date = db.Column(db.Date, nullable=False, default=dt.date.today())
+
+    # A number between 0 and 1
+    weight = db.Column(db.Float(asdecimal=True), nullable=False)
 
     # this variable only gets set if the signal fires, otherwise it's None
     is_buy_signal = db.Column(db.Boolean, nullable=False)
@@ -236,13 +250,17 @@ class Signal(db.Model):
     __mapper_args__ = { 'polymorphic_on' : 'signal_type', 'polymorphic_identity' : 'Generic' }
 
     def __init__(self):
-        pass
+        self.expiration_date = dt.date.today() + \
+                               dt.timedelta(days=RSISignal.EXPIRATION_DAYS)
+        self.weight = RSISignal.WEIGHT
 
     def __repr__(self):
-        return "<Signal(id='%s', stock_point_id='%s', is_buy_signal='%s', " \
-            "signal_type='%s', description='%s')>" % \
-            (self.id, self.stock_point_id, self.is_buy_signal, \
-             self.signal_type, self.description)
+        return "<Signal(id='%s', stock_id='%s', is_buy_signal='%s', " \
+            "signal_type='%s', created_date='%s', expiration_date='%s', " \
+            "weight='%s', description='%s')>" % \
+            (self.id, self.stock_id, self.is_buy_signal, \
+             self.signal_type, self.created_date, self.expiration_date, \
+             self.weight, self.description)
 
     def triggered(self):
         ''' We only store an is_buy_signal column as also including an
@@ -313,16 +331,23 @@ class RSISignal(Signal):
 
     OVERBOUGHT = 70
     OVERSOLD = 30
+    WEIGHT = 0.5
+    EXPIRATION_DAYS = 3  # Number of days until expiration
 
     def __init__(self, df):
         self.df = df
+        self.expiration_date = dt.date.today() + \
+                               dt.timedelta(days=RSISignal.EXPIRATION_DAYS)
+        self.weight = RSISignal.WEIGHT
 
     def __repr__(self):
-        return "<RSISignal(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
-            " signal_type='%s', description='%s', RSISignal.OVERBOUGHT='%s'," \
+        return "<RSISignal(id='%s', stock_id='%s', is_buy_signal='%s', " \
+            "signal_type='%s', created_date='%s', expiration_date='%s', " \
+            "weight='%s', description='%s', RSISignal.OVERBOUGHT='%s'," \
             " RSISignal.OVERSOLD='%s')>" % \
-            (self.id, self.stock_point_id, self.is_buy_signal, \
-             self.signal_type, self.description, RSISignal.OVERBOUGHT, \
+            (self.id, self.stock_id, self.is_buy_signal, \
+             self.signal_type, self.created_date, self.expiration_date, \
+             self.weight, self.description, RSISignal.OVERBOUGHT, \
              RSISignal.OVERSOLD)
 
 
@@ -372,15 +397,22 @@ class MACDSignalCross(Signal):
     # signal fires 
     AFTER = 1
     DATA_REQ = BEFORE + AFTER  # Data Requirements 
+    WEIGHT = 0.5
+    EXPIRATION_DAYS = 3  # Number of days until expiration
 
     def __init__(self, df):
         self.df = df
+        self.expiration_date = dt.date.today() + \
+                               dt.timedelta(days=MACDSignalCross.EXPIRATION_DAYS)
+        self.weight = MACDSignalCross.WEIGHT
 
     def __repr__(self):
-        return "<MACDSignalCross(id='%s', stock_point_id='%s', is_buy_signal='%s'," \
-            " signal_type='%s', description='%s')>" % \
-            (self.id, self.stock_point_id, self.is_buy_signal, \
-             self.signal_type, self.description)
+        return "<MACDSignalCross(id='%s', stock_id='%s', is_buy_signal='%s', " \
+            "signal_type='%s', created_date='%s', expiration_date='%s', " \
+            "weight='%s', description='%s')>" % \
+            (self.id, self.stock_id, self.is_buy_signal, \
+             self.signal_type, self.created_date, self.expiration_date, \
+             self.weight, self.description)
 
     def may_evaluate(self):
         ''' Returns whether there is enough data to do an analysis '''
@@ -409,7 +441,7 @@ class MACDSignalCross(Signal):
             self.is_buy_signal = True
             self.description = "MACD (%s) just turned above the Signal Line" \
                 " (%s)" % (last['MACD'].iloc[-1], last['MACD-Signal'].iloc[-1])
-        if (last['MACD'][:MACDSignalCross.BEFORE] >= \
+        elif (last['MACD'][:MACDSignalCross.BEFORE] >= \
             last['MACD-Signal'][:MACDSignalCross.BEFORE]).all() and \
            (last['MACD'][MACDSignalCross.BEFORE:] < \
             last['MACD-Signal'][MACDSignalCross.BEFORE:]).all():
@@ -429,15 +461,22 @@ class MACDCenterCross(Signal):
     # signal fires 
     AFTER = 1
     DATA_REQ = BEFORE + AFTER  # Data Requirements 
+    WEIGHT = 0.5
+    EXPIRATION_DAYS = 3  # Number of days until expiration
 
     def __init__(self, df):
         self.df = df
+        self.expiration_date = dt.date.today() + \
+                               dt.timedelta(days=MACDCenterCross.EXPIRATION_DAYS)
+        self.weight = MACDCenterCross.WEIGHT
 
     def __repr__(self):
-        return "<MACDCenterCross(id='%s', stock_point_id='%s', " \
-            "is_buy_signal='%s', signal_type='%s', description='%s')>" % \
-            (self.id, self.stock_point_id, self.is_buy_signal, \
-             self.signal_type, self.description)
+        return "<MACDCenterCross(id='%s', stock_id='%s', " \
+            "is_buy_signal='%s', signal_type='%s', created_date='%s', " \
+            "expiration_date='%s', weight='%s', description='%s')>" % \
+            (self.id, self.stock_id, self.is_buy_signal, self.signal_type, \
+             self.created_date, self.expiration_date, self.weight, \
+             self.description)
 
     def may_evaluate(self):
         ''' Returns whether there is enough data to do an analysis '''
@@ -459,10 +498,16 @@ class MACDCenterCross(Signal):
 
         if (last[:MACDCenterCross.BEFORE] <= 0).all() and \
                 (last[MACDCenterCross.BEFORE:] > 0).all():
+            self.expiration_date = dt.date.today() + \
+                                   dt.timedelta(days=MACDCenterCross.EXPIRATION_DAYS)
+            self.weight = MACDCenterCross.WEIGHT
             self.is_buy_signal = True
             self.description = "MACD (%s) just turned positive" % last.iloc[-1]
         elif (last[:MACDCenterCross.BEFORE] >= 0).all() and \
                 (last[MACDCenterCross.BEFORE:] < 0).all():
+            self.expiration_date = dt.date.today() + \
+                                   dt.timedelta(days=MACDCenterCross.EXPIRATION_DAYS)
+            self.weight = MACDCenterCross.WEIGHT
             self.is_buy_signal = False 
             self.description = "MACD (%s) just turned negative" % last.iloc[-1]
         else:

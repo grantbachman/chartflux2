@@ -1,7 +1,7 @@
 import unittest
 import datetime as dt
 from datetime import date
-from app.models import Stock, StockPoint
+from app.models import Stock, StockPoint, Signal
 from app import app, db
 from mock import patch
 import pandas as pd
@@ -51,6 +51,26 @@ class TestStock(unittest.TestCase):
         assert(self.stock.symbol == "TSLA")
         assert(self.stock.name == "Tesla Motors Inc")
         assert(self.stock.market == "NASDAQ")
+
+    def test_signals_are_ordered_properly(self):
+        ''' The first signal should be the one with the latest expiration date '''
+        signal_1, signal_2, signal_3 = Signal(), Signal(), Signal()
+        signal_1.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        signal_1.is_buy_signal = True
+        signal_2.expiration_date = dt.date.today()+dt.timedelta(days=1)
+        signal_2.is_buy_signal = True
+        signal_3.expiration_date = dt.date.today()+dt.timedelta(days=5)
+        signal_3.is_buy_signal = True
+        self.stock.signals.append(signal_1)
+        self.stock.signals.append(signal_2)
+        self.stock.signals.append(signal_3)
+        db.session.add(self.stock)
+        print self.stock.signals
+        # signals aren't re-ordered until the commit, unless
+        # reorder_on_append is set
+        db.session.commit()
+        print self.stock.signals
+        assert(self.stock.signals[0] == signal_3)
 
     def test_save_dataframe_creates_new_stock(self):
         ''' When a Stock doesn't exist, a new Stock object should be 
