@@ -40,7 +40,7 @@ class Stock(db.Model):
 
     def calculate_indicators(self):
         print("Calculating indicators for %s" % (self.name,))
-        df = self.load_dataframe_from_db(reset_index=True)
+        df = self.load_dataframe_from_db()
 
         df = RSI(df).calculate()
         rsi = RSISignal(df)
@@ -48,9 +48,13 @@ class Stock(db.Model):
         if rsi.triggered() == True:
             num_points = len(self.stockpoints)
             self.stockpoints[num_points-1].signals.append(rsi)
-        self._save_indicators(df) # saves new df columns and any new signals
+        self.update_dataframe(df) # saves new df columns and any new signals
 
-    def _save_indicators(self,df):
+    def update_dataframe(self,df):
+        ''' Loops through the rows and saving off the values. This
+        method is sort of like _save_dataframe, except it doesn't
+        create anything new, just updates. '''
+        df = df.reset_index()
         for row_index, row in df.iterrows():
             if 'RSI' in df:
                 self.stockpoints[row_index].rsi = df['RSI'][row_index]
@@ -70,38 +74,52 @@ class Stock(db.Model):
             self.fetch_and_save_missing_ohlc()
         return self.load_dataframe_from_db()
 
-    def load_dataframe_from_db(self, reset_index=False):
-        df = pd.DataFrame(columns = ('Date','Open','High','Low','Close', 'Adj Close', 'Volume'))
+    def load_dataframe_from_db(self):
+        df = pd.DataFrame(columns = ('Date','Open','High','Low','Close', 
+                                     'Adj Close', 'Volume', 'RSI', 'MACD',
+                                     'MACD-Signal'
+                                     )
+                          )
         df.set_index(keys='Date', drop=True, inplace=True)
+        # The values are stored as decimal, convert them to float
         for point in self.stockpoints:
-            df.loc[point.date] =[float(point.open),float(point.high),float(point.low),float(point.close),float(point.adj_close),int(point.volume)]
-        if reset_index == True:
-            df.reset_index(inplace=True)
+            tempList = [float(point.open),
+                        float(point.high),
+                        float(point.low),
+                        float(point.close),
+                        float(point.adj_close),
+                        int(point.volume)
+                       ]
+            
+            # you can't run float on a NoneType object
+            optional = [point.rsi, point.macd, point.macd_signal]
+            for opt in optional:
+                if opt is not None:
+                    tempList.append(float(opt))
+                else:
+                    tempList.append(opt)
+            df.loc[point.date] = tempList
         return df
 
-    def _save_dataframe(self,df): 
-        ''' Saves a dataframe and all it's columns. The dataframe must have reset_index
-        called on it prior to saving.
-        If the stock doesn't exist, it creates it.
+    def _save_dataframe(self, df): 
+        ''' Given a dataframe, saves all the rows as new StockPoints.
+        Only the OHLCV data gets saved during this process.
+        This method gets called during nightly processing.
         '''
+
         if Stock.query.filter(Stock.symbol==self.symbol,
                               Stock.market==self.market).count() == 0:
             db.session.add(self)
-        # get the index in which the date resides so we can skip it
-        # when checking the datatypes of the other columns
-        for index, row in enumerate(df.columns):
-            if row == 'Date': date_col_index = index
 
-        for row_index, row in df.iterrows():
-            row['Date']=row['Date'].date()
+        for index, row in df.iterrows():
             try:
                 # Attempt to call float() on each value in the row.
-                # If that call errs, then don't save the row.
-                [float(val) for index,val in enumerate(row) if index != date_col_index]
+                # If that call errs for whatever reason, then don't save the row.
+                [float(val) for ix,val in enumerate(row)]
             except:
                 pass
             else:
-                newPoint = StockPoint(date=row['Date'], open=row['Open'],
+                newPoint = StockPoint(date=index.date(), open=row['Open'],
                                       high=row['High'], low=row['Low'],
                                       close=row['Close'], adj_close=row['Adj Close'],
                                       volume=row['Volume'])
@@ -112,20 +130,19 @@ class Stock(db.Model):
             db.session.rollback()
 
     def fetch_and_save_missing_ohlc(self):
-        '''
-        Grabs the last point of the Stock's data to figure out for what 
+        ''' Grabs the last point of the Stock's data to figure out for what 
         dates it needs to query. Then saves off the data in the Stock's table.
         '''
         next_point_date = self.stockpoints[-1].date + dt.timedelta(days=1)
         if next_point_date.weekday() not in (5,6) and \
-        next_point_date != today():
+        next_point_date != today():  # they don't provide today's data
             yesterday = today() - dt.timedelta(days=1) 
             df = self.fetch_ohlc_from_yahoo(next_point_date, yesterday)
             if df is not None:
                 self._save_dataframe(df)               
     
     def fetch_and_save_all_ohlc(self):
-        ''' Fetches the model's maximum number of data points'''
+        ''' Fetches the model's maximum number of data points '''
         end_date = today()
         start_date  = end_date - dt.timedelta(days = Stock.LOOKBACK_DAYS)
         df = self.fetch_ohlc_from_yahoo(start_date, end_date)
@@ -165,12 +182,25 @@ class StockPoint(db.Model):
     macd = db.Column(db.Float(precision=2,asdecimal=True))
     macd_signal = db.Column(db.Float(precision=2,asdecimal=True))
 
-    # Each StockPoint (each day) can have a variable number of signals that have been triggered
+    # Each StockPoint (each day) can have a variable number of signals that
+    # have been triggered
     signals = db.relationship('Signal') 
         
-    def __init__(self, date=date, open=open, high=high,
-                 low=low, close=close, adj_close=adj_close, volume=volume):
-        self.date, self.open, self.high, self.low, self.close, self.adj_close, self.volume = date, open, high, low, close, adj_close, volume
+    def __init__(self, date, open, high, low, close, adj_close, volume,
+                 rsi=None, macd=None, macd_signal=None):
+        ''' Required: date, open, high, low, close, adj_Close, volume
+            Optional: rsi, macd, macd_signal
+        '''
+        self.date = date
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.adj_close = adj_close
+        self.volume = volume
+        self.rsi = rsi
+        self.macd = macd
+        self.macd_signal = macd_signal
 
     @staticmethod
     def last_known_date():
@@ -241,6 +271,8 @@ class RSI(object):
                                'Avg Gain': 0,
                                'Avg Loss': 0,
                                })
+        rsi_df.index.name='Date'
+        rsi_df.reset_index(inplace=True)
         ''' Calculate the first Average Gain and Average Loss, which is
         the simple mean of Gains and Losses for the first 14 datapoints
         with a Change (so, rows 1 thru 15). The Average Loss is
@@ -248,10 +280,10 @@ class RSI(object):
         '''
         rsi_df['Gain'] = rsi_df['Change'][rsi_df['Change'] > 0]
         rsi_df['Loss'] = rsi_df['Change'][rsi_df['Change'] < 0] * -1
-        rsi_df = rsi_df.fillna(value=0)
-        rsi_df['Avg Gain'].ix[RSI.LOOKBACK] = \
+        rsi_df.fillna(value=0, inplace=True)
+        rsi_df.loc[RSI.LOOKBACK,'Avg Gain'] = \
             rsi_df['Gain'][1:RSI.LOOKBACK+1].mean()
-        rsi_df['Avg Loss'].ix[RSI.LOOKBACK] = \
+        rsi_df.loc[RSI.LOOKBACK,'Avg Loss'] = \
             rsi_df['Loss'][1:RSI.LOOKBACK+1].mean()
 
         ''' The rest of the Avg Gain/Avg Loss points use the following
@@ -268,9 +300,10 @@ class RSI(object):
             [index] just accesses a copy 
             '''
             if index > RSI.LOOKBACK:  
-                rsi_df['Avg Gain'].ix[index] = (rsi_df['Avg Gain'][index-1] * (RSI.LOOKBACK - 1) + rsi_df['Gain'][index]) / RSI.LOOKBACK
-                rsi_df['Avg Loss'].ix[index] = (rsi_df['Avg Loss'][index-1] * (RSI.LOOKBACK - 1) + rsi_df['Loss'][index]) / RSI.LOOKBACK 
+                rsi_df.loc[index,'Avg Gain'] = (rsi_df['Avg Gain'][index-1] * (RSI.LOOKBACK - 1) + rsi_df['Gain'][index]) / RSI.LOOKBACK
+                rsi_df.loc[index,'Avg Loss'] = (rsi_df['Avg Loss'][index-1] * (RSI.LOOKBACK - 1) + rsi_df['Loss'][index]) / RSI.LOOKBACK 
         rsi_df['RS'] = rsi_df['Avg Gain'] / rsi_df['Avg Loss']
+        rsi_df.set_index(keys='Date', drop=True, inplace=True)
         self.df['RSI'] = 100 - (100 / (1 + rsi_df['RS']))
         return self.df
 

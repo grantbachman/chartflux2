@@ -4,6 +4,7 @@ from datetime import date
 from app.models import Stock, StockPoint
 from app import app, db
 from mock import patch
+import pandas as pd
 from pandas import DataFrame, DatetimeIndex
 import StockFactory as SF
 
@@ -12,7 +13,7 @@ class TestStockPoint(unittest.TestCase):
     def setUp(self):
         db.create_all()
         self.stock = SF.build_stock()
-        df = SF.build_dataframe()
+        df = SF.build_dataframe(days=10)
         self.stock._save_dataframe(df)
 
     def tearDown(self):
@@ -22,12 +23,14 @@ class TestStockPoint(unittest.TestCase):
         assert(StockPoint.query.filter(Stock.id == 1).count() == 10)
 
     def test_last_known_date(self):
+        ''' last_known_date() should return the date of last point '''
         assert(StockPoint.query.count() == 10)
         assert(StockPoint.last_known_date() == dt.date.today())
     
     def test_stockpoint_repr(self):
         print self.stock.stockpoints[0]
         assert("<StockPoint(id='1', stock_id='1'" in self.stock.stockpoints[0].__repr__())
+
 
 
 class TestStock(unittest.TestCase):
@@ -40,22 +43,6 @@ class TestStock(unittest.TestCase):
 
     def tearDown(self):
         db.drop_all()
-        
-    '''
-    @patch('app.models.RSI.find_buy_stocks')
-    @patch('app.models.MACD.find_buy_stocks')
-    def test_find_buy_stocks(self, macd_buy, rsi_buy):
-        Stock.find_buy_stocks()
-        assert(macd_buy.called)
-        assert(rsi_buy.called)
-
-    @patch('app.models.RSI.find_sell_stocks')
-    @patch('app.models.MACD.find_sell_stocks')
-    def test_find_sell_stocks(self, macd_sell, rsi_sell):
-        Stock.find_sell_stocks()
-        assert(macd_sell.called)
-        assert(rsi_sell.called)
-    '''
 
     def test_stock_repr(self):
         assert(self.stock.__repr__() == "<Stock(id='None', symbol='TSLA', name='Tesla Motors Inc', market='NASDAQ')>")
@@ -65,17 +52,47 @@ class TestStock(unittest.TestCase):
         assert(self.stock.name == "Tesla Motors Inc")
         assert(self.stock.market == "NASDAQ")
 
-    def test_load_dataframe_from_db(self):
-        today = dt.date.today()
-        df = SF.build_dataframe(days=1)
+    def test_save_dataframe_creates_new_stock(self):
+        ''' When a Stock doesn't exist, a new Stock object should be 
+        created and saved.
+        ''' 
+        assert(Stock.query.count() == 0)
+        df = DataFrame()
         self.stock._save_dataframe(df)
+        assert(Stock.query.count() == 1)
+
+    def test_save_dataframe_does_not_create_new_stock(self):
+        ''' When a Stock already exists, no new Stock object should be
+        created.
+        '''
+        df = DataFrame()
+        assert(Stock.query.count() == 0)
+        self.stock._save_dataframe(df)
+        assert(Stock.query.count() == 1)
+        self.stock._save_dataframe(df)
+        assert(Stock.query.count() == 1)
+
+
+    def test_load_dataframe_from_db(self):
+        ''' When loading a dataframe, all fields our model knows about
+        should be loaded, including RSI/MACD/moving averages, etc.
+        '''
+        today = dt.date.today()
+        self.stock.stockpoints.append(StockPoint(today, 1.5, 3.17, 1.21, 
+                                                 1.76, 1.76, 123456, 30.14,
+                                                 1.21, macd_signal=None))
+        db.session.commit()
+        
         df = self.stock.load_dataframe_from_db()
-        assert(df.loc[today]['Open'] == 1)
-        assert(df.loc[today]['High'] == 1)
-        assert(df.loc[today]['Low'] == 1)
-        assert(df.loc[today]['Close'] == 1)
-        assert(df.loc[today]['Adj Close'] == 1)
-        assert(df.loc[today]['Volume'] == 1)
+        assert(df.loc[today]['Open'] == 1.5)
+        assert(df.loc[today]['High'] == 3.17)
+        assert(df.loc[today]['Low'] == 1.21)
+        assert(df.loc[today]['Close'] == 1.76)
+        assert(df.loc[today]['Adj Close'] == 1.76)
+        assert(df.loc[today]['Volume'] == 123456)
+        assert(df.loc[today]['RSI'] == 30.14)
+        assert(df.loc[today]['MACD'] == 1.21)
+        assert(pd.isnull((df.loc[today]['MACD-Signal'])))
 
     @patch('app.models.Stock.fetch_ohlc_from_yahoo')
     def test_fetch_all_ohlc_from_yahoo(self,mock_fetch):   
@@ -90,21 +107,6 @@ class TestStock(unittest.TestCase):
         start = end - dt.timedelta(days=1)
         df = self.stock.fetch_ohlc_from_yahoo(start, end)
         MockDataReader.assert_called_with("TSLA","yahoo",start,end)
-
-    def test_save_dataframe_creates_new_stock(self):
-        print Stock.query.all()
-        assert(Stock.query.count() == 0)
-        df = DataFrame()
-        self.stock._save_dataframe(df)
-        assert(Stock.query.count() == 1)
-
-    def test_save_dataframe_does_not_create_new_stock(self):
-        df = DataFrame()
-        assert(Stock.query.count() == 0)
-        self.stock._save_dataframe(df)
-        assert(Stock.query.count() == 1)
-        self.stock._save_dataframe(df)
-        assert(Stock.query.count() == 1)
 
     @patch('app.models.today')
     @patch('app.models.Stock.fetch_ohlc_from_yahoo')
@@ -141,4 +143,17 @@ class TestStock(unittest.TestCase):
         assert(StockPoint.query.count() == 0)
         df = SF.build_dataframe(values={'Open':['-',1,2]})
         self.stock._save_dataframe(df)
+        print df
         assert(StockPoint.query.count() == 2)
+
+    def test_update_dataframe(self):
+        ''' Should update the RSI, MACD, MACD-Signal '''
+        df = SF.build_dataframe(values={'RSI':[1],'MACD':[2],'MACD-Signal':[3]})
+        self.stock._save_dataframe(df) 
+        df['RSI'] = 4
+        df['MACD'] = 5
+        df['MACD-Signal'] = 6
+        self.stock.update_dataframe(df)
+        assert(self.stock.stockpoints[0].rsi == 4)
+        assert(self.stock.stockpoints[0].macd == 5)
+        assert(self.stock.stockpoints[0].macd_signal == 6)

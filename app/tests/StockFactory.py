@@ -7,7 +7,7 @@ def build_stock():
                  name='Tesla Motors Inc',
                  market='NASDAQ')
 
-def build_dataframe(days=10, fill_value=1., values={}, end_date=dt.date.today(), date_index=False):
+def build_dataframe(days=10, fill_value=1., values={}, end_date=dt.date.today(), date_index=True):
     ''' Constructs and returns a DataFrame in the form of those that
     are returned by Pandas DataReader. It doesn't take weekends or
     holidays into account, so weeked dates will generate values
@@ -29,13 +29,12 @@ def build_dataframe(days=10, fill_value=1., values={}, end_date=dt.date.today(),
         today's date.
     date_index: A boolean flag of whether the returned dataframe should
         set the date as the index (instead of the default numerical 
-        index). If true, the dataframe will perfectly mimic that which
-        is returned by Pandas DataReader.
+        index). If True, the dataframe will perfectly mimic that which
+        is returned by Pandas DataReader. Default is True.
 
     In addition, you may specify a non OHLC column, such as RSI, and
     it will be added to the typical OHLC dataframe that gets created.
     '''
-    # some preprocessing
     columns = ['Open','High','Low','Close','Adj Close','Volume']
 
 

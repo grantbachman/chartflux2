@@ -25,15 +25,6 @@ class TestMACD(unittest.TestCase):
         ''' I'll do this later, but I'm not too concerned right now. '''
         pass
 
-    def test_MACD_values_get_saved(self):
-        self.stock = SF.build_stock()
-        db.session.add(self.stock)
-        self.stock._save_dataframe(self.df)
-        self.df = MACD(self.df).calculate()
-        self.stock._save_indicators(self.df)
-        assert(self.stock.stockpoints[16].macd is not None)
-        assert(self.stock.stockpoints[16].macd_signal is not None)
-
 class TestMACDCenterCross(unittest.TestCase):
     def setUp(self):
         db.create_all()
@@ -127,21 +118,11 @@ class TestRSI(unittest.TestCase):
 
     def test_RSI_correctness(self):
         self.df = RSI(self.df).calculate()
-        print self.df['RSI'][16]
         assert('RSI' in self.df.columns)
         assert(isnull(self.df['RSI'][13]))
         # crunched the numbers in Excel.
         self.assertAlmostEqual(self.df['RSI'][14], 69.46, 2)
         self.assertAlmostEqual(self.df['RSI'][16], 58.18, 2)
-
-    def test_RSI_values_get_saved(self):
-        self.stock = SF.build_stock()
-        db.session.add(self.stock)
-        self.stock._save_dataframe(self.df)
-        self.df = RSI(self.df).calculate()
-        self.stock._save_indicators(self.df)
-        assert(self.stock.stockpoints[16].rsi is not None)
-        self.assertAlmostEqual(self.stock.stockpoints[16].rsi, Decimal(58.18), 2)
 
 class TestSignal(unittest.TestCase):
     
