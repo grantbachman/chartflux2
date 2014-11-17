@@ -2,6 +2,8 @@ from pandas.io.data import DataReader
 import pandas as pd
 import datetime as dt
 from app import db
+import logging
+from sqlalchemy import func
 from sqlalchemy.sql.expression import asc, desc
 from sqlalchemy.ext.orderinglist import ordering_list
 
@@ -21,7 +23,7 @@ class Stock(db.Model):
     stockpoints = db.relationship('StockPoint', order_by=asc('stock_point.date'))
     signals = db.relationship('Signal', order_by=desc('signal.expiration_date'))
 
-    LOOKBACK_DAYS = 20000  
+    LOOKBACK_DAYS = 2000
 
     def __init__(self, symbol=symbol, name=name, market=market):
         self.symbol = symbol.upper()
@@ -34,11 +36,19 @@ class Stock(db.Model):
 
     @staticmethod
     def find_buy_stocks():
-        return None
+        ''' Returns a list of (Stock.id, #signals) tuples '''
+        buy_list = db.session.query(Signal.stock_id, func.count(Signal.stock_id))\
+            .filter(Signal.is_buy_signal == True)\
+            .group_by(Signal.stock_id).having(func.count(Signal.stock_id) > 1).all()
+        return buy_list
 
     @staticmethod
     def find_sell_stocks():
-        return None
+        ''' Returns a list of (Stock.id, #signals) tuples '''
+        sell_list = db.session.query(Signal.stock_id, func.count(Signal.stock_id))\
+            .filter(Signal.is_buy_signal == False)\
+            .group_by(Signal.stock_id).having(func.count(Signal.stock_id) > 1).all()
+        return sell_list
 
     def calculate_indicators(self):
         df = self.load_dataframe_from_db()
@@ -47,17 +57,14 @@ class Stock(db.Model):
         rsi_signal = RSISignal(df)
         rsi_signal.evaluate()
         if rsi_signal.triggered() == True:
-            print "Triggering RSI signal"
             self.signals.append(rsi_signal)
         macd_center_cross_signal = MACDCenterCross(df)
         macd_center_cross_signal.evaluate()
         if macd_center_cross_signal.triggered() == True:
-            print "Triggering MACD Center signal"
             self.signals.append(macd_center_cross_signal)
         macd_signal_cross_signal= MACDSignalCross(df)
         macd_signal_cross_signal.evaluate()
         if macd_signal_cross_signal.triggered() == True:
-            print "Triggering MACD Signal signal"
             self.signals.append(macd_signal_cross_signal)
         self.update_dataframe(df) # saves new df columns and any new signals
 
@@ -128,7 +135,7 @@ class Stock(db.Model):
                 # If that call errs for whatever reason, then don't save the row.
                 [float(val) for ix,val in enumerate(row)]
             except:
-                pass
+                logging.warning('Error with %s. Tried to save row %s with values %s, but the row has something invalid.' % (self, index, row))
             else:
                 newPoint = StockPoint(date=index.date(), open=row['Open'],
                                       high=row['High'], low=row['Low'],
@@ -138,6 +145,7 @@ class Stock(db.Model):
         try:
             db.session.commit()
         except:
+            logging.warning('Error with %s. Tried to save dataframe, but the transaction was rolled back.' % self)
             db.session.rollback()
 
     def fetch_and_save_missing_ohlc(self):
@@ -169,8 +177,9 @@ class Stock(db.Model):
         except IOError:   # Raised when symbol isn't found
             return None
         else:
+            ''' When using Google as a data source, the index name gets returned
+                prepended with a byte-order mark '\xef\xbb\xbfDate', so rename it '''
             df.index.name = 'Date'
-            df.reset_index(inplace=True) # for saving the date
             return df
 
 class StockPoint(db.Model):
@@ -360,7 +369,7 @@ class RSISignal(Signal):
         cur_rsi = self.df['RSI'][len(self.df)-1]
         if cur_rsi >= RSISignal.OVERBOUGHT:
             self.is_buy_signal = False
-            self.description = "RSI is '%s'" % cur_rsi
+            self.description = "RSI is %s" % cur_rsi
         elif cur_rsi <= RSISignal.OVERSOLD:
             self.is_buy_signal = True
             self.description = "RSI is '%s'" % cur_rsi

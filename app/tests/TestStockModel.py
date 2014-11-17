@@ -52,6 +52,38 @@ class TestStock(unittest.TestCase):
         assert(self.stock.name == "Tesla Motors Inc")
         assert(self.stock.market == "NASDAQ")
 
+    def test_find_buy_stocks(self):
+        ''' Stock.find_buy_stocks() should only return Stocks with 2 or
+        more non-expired signals (this will probably change later) '''
+        signal_1, signal_2, signal_3 = Signal(), Signal(), Signal()
+        signal_1.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        signal_1.is_buy_signal = True
+        signal_2.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        signal_2.is_buy_signal = True
+        self.stock.signals.append(signal_1)
+        self.stock.signals.append(signal_2)
+        db.session.add(self.stock)
+        db.session.commit()
+        buy_list = Stock.find_buy_stocks()
+        print buy_list
+        assert(any([x[0] == 1 for x in buy_list]))
+
+    def test_find_sell_stocks(self):
+        ''' Stock.find_sell_stocks() should only return Stock IDs with 2 or
+        more non-expired signals (this will probably change later) '''
+        signal_1, signal_2, signal_3 = Signal(), Signal(), Signal()
+        signal_1.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        signal_1.is_buy_signal = False
+        signal_2.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        signal_2.is_buy_signal = False
+        self.stock.signals.append(signal_1)
+        self.stock.signals.append(signal_2)
+        db.session.add(self.stock)
+        db.session.commit()
+        sell_list = Stock.find_sell_stocks()
+        print sell_list
+        assert(any([x[0] == 1 for x in sell_list]))
+
     def test_signals_are_ordered_properly(self):
         ''' The first signal should be the one with the latest expiration date '''
         signal_1, signal_2, signal_3 = Signal(), Signal(), Signal()
