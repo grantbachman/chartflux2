@@ -55,34 +55,56 @@ class TestStock(unittest.TestCase):
     def test_find_buy_stocks(self):
         ''' Stock.find_buy_stocks() should only return Stocks with 2 or
         more non-expired signals (this will probably change later) '''
-        signal_1, signal_2, signal_3 = Signal(), Signal(), Signal()
-        signal_1.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        signal_1, signal_2, signal_3, signal_4 = Signal(), Signal(), Signal(), Signal()
+        # Signal 1 should qualify
+        signal_1.expiration_date = dt.date.today() + dt.timedelta(days=1)
         signal_1.is_buy_signal = True
-        signal_2.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        # Signal 2 should qualify
+        signal_2.expiration_date = dt.date.today()
         signal_2.is_buy_signal = True
+        # Signal 3 should not qualify since it's not a buy signal
+        signal_3.expiration_date = dt.date.today()
+        signal_3.is_buy_signal = False
+        # Signal 3 should not qualify since it's expired
+        signal_4.expiration_date = dt.date.today() - dt.timedelta(days=1)
+        signal_4.is_buy_signal = True
         self.stock.signals.append(signal_1)
         self.stock.signals.append(signal_2)
+        self.stock.signals.append(signal_3)
+        self.stock.signals.append(signal_4)
         db.session.add(self.stock)
         db.session.commit()
         buy_list = Stock.find_buy_stocks()
         print buy_list
-        assert(any([x[0] == 1 for x in buy_list]))
+        assert(buy_list[0][0] == 1)  # assert Stock.id == 1
+        assert(buy_list[0][1] == 2)  # assert there are exactly 2 signals found
 
     def test_find_sell_stocks(self):
         ''' Stock.find_sell_stocks() should only return Stock IDs with 2 or
         more non-expired signals (this will probably change later) '''
-        signal_1, signal_2, signal_3 = Signal(), Signal(), Signal()
-        signal_1.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        signal_1, signal_2, signal_3, signal_4 = Signal(), Signal(), Signal(), Signal()
+        # Signal 1 should qualify
+        signal_1.expiration_date = dt.date.today() + dt.timedelta(days=1)
         signal_1.is_buy_signal = False
-        signal_2.expiration_date = dt.date.today()+dt.timedelta(days=3)
+        # Signal 2 should qualify
+        signal_2.expiration_date = dt.date.today()
         signal_2.is_buy_signal = False
+        # Signal 3 should not qualify since it's not a sell signal
+        signal_3.expiration_date = dt.date.today()
+        signal_3.is_buy_signal = True
+        # Signal 4 should not qualify since it's expired
+        signal_4.expiration_date = dt.date.today() - dt.timedelta(days=1)
+        signal_4.is_buy_signal = False
         self.stock.signals.append(signal_1)
         self.stock.signals.append(signal_2)
+        self.stock.signals.append(signal_3)
+        self.stock.signals.append(signal_4)
         db.session.add(self.stock)
         db.session.commit()
         sell_list = Stock.find_sell_stocks()
         print sell_list
-        assert(any([x[0] == 1 for x in sell_list]))
+        assert(sell_list[0][0] == 1)  # assert Stock.id == 1
+        assert(sell_list[0][1] == 2)  # assert there are exactly 2 signals found
 
     def test_signals_are_ordered_properly(self):
         ''' The first signal should be the one with the latest expiration date '''

@@ -39,6 +39,7 @@ class Stock(db.Model):
         ''' Returns a list of (Stock.id, #signals) tuples '''
         buy_list = db.session.query(Signal.stock_id, func.count(Signal.stock_id))\
             .filter(Signal.is_buy_signal == True)\
+            .filter(Signal.expiration_date >= dt.date.today())\
             .group_by(Signal.stock_id).having(func.count(Signal.stock_id) > 1).all()
         return buy_list
 
@@ -47,6 +48,7 @@ class Stock(db.Model):
         ''' Returns a list of (Stock.id, #signals) tuples '''
         sell_list = db.session.query(Signal.stock_id, func.count(Signal.stock_id))\
             .filter(Signal.is_buy_signal == False)\
+            .filter(Signal.expiration_date >= dt.date.today())\
             .group_by(Signal.stock_id).having(func.count(Signal.stock_id) > 1).all()
         return sell_list
 
