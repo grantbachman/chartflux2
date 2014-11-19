@@ -12,12 +12,11 @@ def page_not_found(e):
 
 @app.route('/')
 def index():
-    date = today() - dt.timedelta(days=1)
-    try:
-        pass
-    except:
-        abort(404, 'Umm... We couldn\'t even generate the home page. That\'s bad.')
-    return render_template('index.html', buy_stocks=None, sell_stocks=None)
+    buy_stocks = Stock.find_buy_stocks()
+    sell_stocks = Stock.find_sell_stocks()
+    return render_template('index.html',
+                           buy_stocks=buy_stocks,
+                           sell_stocks=sell_stocks)
 
 @app.route('/chart')
 def chart():

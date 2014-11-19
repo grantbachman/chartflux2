@@ -2,10 +2,8 @@ from app.models import Stock
 from pandas import DataFrame, DatetimeIndex
 import datetime as dt
 
-def build_stock():
-    return Stock(symbol='TSLA',
-                 name='Tesla Motors Inc',
-                 market='NASDAQ')
+def build_stock(symbol='TSLA', name='Tesla Motors Inc', market='NASDAQ'):
+    return Stock(symbol=symbol, name=name, market=market)
 
 def build_dataframe(days=10, fill_value=1., values={}, end_date=dt.date.today(), date_index=True):
     ''' Constructs and returns a DataFrame in the form of those that

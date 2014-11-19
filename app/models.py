@@ -37,19 +37,21 @@ class Stock(db.Model):
     @staticmethod
     def find_buy_stocks():
         ''' Returns a list of (Stock.id, #signals) tuples '''
-        buy_list = db.session.query(Signal.stock_id, func.count(Signal.stock_id))\
+        buy_list = db.session.query(Stock, func.count(Signal.stock_id))\
+            .filter(Stock.id == Signal.stock_id)\
             .filter(Signal.is_buy_signal == True)\
             .filter(Signal.expiration_date >= dt.date.today())\
-            .group_by(Signal.stock_id).having(func.count(Signal.stock_id) > 1).all()
+            .group_by(Stock.id).having(func.count(Signal.stock_id) > 1).all()
         return buy_list
 
     @staticmethod
     def find_sell_stocks():
         ''' Returns a list of (Stock.id, #signals) tuples '''
-        sell_list = db.session.query(Signal.stock_id, func.count(Signal.stock_id))\
+        sell_list = db.session.query(Stock, func.count(Signal.stock_id))\
+            .filter(Stock.id == Signal.stock_id)\
             .filter(Signal.is_buy_signal == False)\
             .filter(Signal.expiration_date >= dt.date.today())\
-            .group_by(Signal.stock_id).having(func.count(Signal.stock_id) > 1).all()
+            .group_by(Stock.id).having(func.count(Signal.stock_id) > 1).all()
         return sell_list
 
     def calculate_indicators(self):

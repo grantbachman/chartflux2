@@ -73,10 +73,15 @@ class TestStock(unittest.TestCase):
         self.stock.signals.append(signal_3)
         self.stock.signals.append(signal_4)
         db.session.add(self.stock)
+        # add a second stock to ensure everything isn't picked up
+        stock_2 = SF.build_stock("GOOG","Google Inc.")
+        db.session.add(stock_2)
         db.session.commit()
+        # Returns a (Stock, #signals) tuple
         buy_list = Stock.find_buy_stocks()
         print buy_list
-        assert(buy_list[0][0] == 1)  # assert Stock.id == 1
+        assert(len(buy_list) == 1)
+        assert(buy_list[0][0] == self.stock)
         assert(buy_list[0][1] == 2)  # assert there are exactly 2 signals found
 
     def test_find_sell_stocks(self):
@@ -100,10 +105,15 @@ class TestStock(unittest.TestCase):
         self.stock.signals.append(signal_3)
         self.stock.signals.append(signal_4)
         db.session.add(self.stock)
+        # add a second stock to ensure everything isn't picked up
+        stock_2 = SF.build_stock("GOOG","Google Inc.")
+        db.session.add(stock_2)
         db.session.commit()
+        # Returns a (Stock, #signals) tuple
         sell_list = Stock.find_sell_stocks()
         print sell_list
-        assert(sell_list[0][0] == 1)  # assert Stock.id == 1
+        assert(len(sell_list) == 1)
+        assert(sell_list[0][0] == self.stock)  
         assert(sell_list[0][1] == 2)  # assert there are exactly 2 signals found
 
     def test_signals_are_ordered_properly(self):
