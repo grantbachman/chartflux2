@@ -12,7 +12,7 @@
 	<tr class="success"><td>Buying Recommendations</td></tr>
     {% if buy_stocks is not none %}
        {% for i in buy_stocks %}
-       <tr><td><a href='/chart?symbol={{ i[0].symbol }}'>{% print "%s - %s" % (i[0].symbol, i[0].name) %}</a></td></tr>
+       <tr><td><a href={{ url_for('chart',symbol=i[0].symbol) }}>{% print "%s - %s" % (i[0].symbol, i[0].name) %}</a></td></tr>
        {% endfor %}
 	{% else %}
 	   <tr><td>I got nothin...</tr></td>
@@ -24,7 +24,7 @@
 	<tr class="danger"><td>Selling Recommendations</td></tr>
     {% if sell_stocks is not none %}
        {% for i in sell_stocks %}
-       <tr><td><a href='/chart?symbol={{ i[0].symbol }}'>{% print "%s - %s" % (i[0].symbol, i[0].name) %}</a></td></tr>
+       <tr><td><a href={{ url_for('chart',symbol=i[0].symbol) }}>{% print "%s - %s" % (i[0].symbol, i[0].name) %}</a></td></tr>
        {% endfor %}
 	{% else %}
 	   <tr><td>I got nothin...</tr></td>

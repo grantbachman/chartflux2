@@ -1,13 +1,85 @@
 import unittest
 import datetime as dt
 from app.models import Stock, StockPoint, Signal, RSI, RSISignal, MACD
-from app.models import MACDSignalCross, MACDCenterCross
+from app.models import MACDSignalCross, MACDCenterCross, SMA50PriceCross
+from app.models import SMA200PriceCross
 from app import db
 from pandas import DataFrame, DatetimeIndex, isnull
 from decimal import Decimal
 import StockFactory as SF
-
     
+class TestSMAPrice200Cross(unittest.TestCase):
+    def setUp(self):
+        db.create_all()
+        self.stock = SF.build_stock()
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_buy_signal_triggers(self):
+        df = SF.build_dataframe(values={'Adj Close':[1]*50 + [3],
+                                        'SMA-200':[2]*51})
+        signal = SMA200PriceCross(df)
+        signal.evaluate()
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == True)
+        assert(signal.description is not None)
+
+    def test_sell_signal_triggers(self):
+        df = SF.build_dataframe(values={'Adj Close':[3]*50 + [1],
+                                        'SMA-200':[2]*51})
+        signal = SMA200PriceCross(df)
+        signal.evaluate()
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == False)
+        assert(signal.description is not None)
+
+    def test_no_signal_triggers(self):
+        df = SF.build_dataframe(values={'Adj Close':[3]*51,
+                                        'SMA-200':[2]*51})
+        signal = SMA200PriceCross(df)
+        signal.evaluate()
+        print signal
+        assert(signal.triggered() == False)
+        assert(signal.is_buy_signal == None)
+        assert(signal.description is None)
+
+class TestSMAPrice50Cross(unittest.TestCase):
+    def setUp(self):
+        db.create_all()
+        self.stock = SF.build_stock()
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_buy_signal_triggers(self):
+        df = SF.build_dataframe(values={'Adj Close':[1]*10 + [3],
+                                        'SMA-50':[2]*11})
+        signal = SMA50PriceCross(df)
+        signal.evaluate()
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == True)
+        assert(signal.description is not None)
+
+    def test_sell_signal_triggers(self):
+        df = SF.build_dataframe(values={'Adj Close':[3]*10 + [1],
+                                        'SMA-50':[2]*11})
+        signal = SMA50PriceCross(df)
+        signal.evaluate()
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == False)
+        assert(signal.description is not None)
+
+    def test_no_signal_triggers(self):
+        df = SF.build_dataframe(values={'Adj Close':[3]*11,
+                                        'SMA-50':[2]*11})
+        signal = SMA50PriceCross(df)
+        signal.evaluate()
+        print signal
+        assert(signal.triggered() == False)
+        assert(signal.is_buy_signal == None)
+        assert(signal.description is None)
+
 class TestMACD(unittest.TestCase):
     def setUp(self):
         db.create_all()

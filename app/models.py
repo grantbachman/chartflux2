@@ -58,6 +58,8 @@ class Stock(db.Model):
         df = self.load_dataframe_from_db()
         df = RSI(df).calculate()
         df = MACD(df).calculate()
+        df = SMA(df, 50).calculate()
+        df = SMA(df, 200).calculate() 
         rsi_signal = RSISignal(df)
         rsi_signal.evaluate()
         if rsi_signal.triggered() == True:
@@ -70,6 +72,14 @@ class Stock(db.Model):
         macd_signal_cross_signal.evaluate()
         if macd_signal_cross_signal.triggered() == True:
             self.signals.append(macd_signal_cross_signal)
+        sma50_price_cross_signal = SMA50PriceCross(df)
+        sma50_price_cross_signal.evaluate()
+        if sma50_price_cross_signal.triggered() == True:
+            self.signals.append(sma50_price_cross_signal)
+        sma200_price_cross_signal = SMA200PriceCross(df)
+        sma200_price_cross_signal.evaluate()
+        if sma200_price_cross_signal.triggered() == True:
+            self.signals.append(sma200_price_cross_signal)
         self.update_dataframe(df) # saves new df columns and any new signals
 
     def update_dataframe(self,df):
@@ -84,6 +94,10 @@ class Stock(db.Model):
                 self.stockpoints[row_index].macd = df.loc[row_index]['MACD']
             if 'MACD-Signal' in df:
                 self.stockpoints[row_index].macd_signal = df.loc[row_index]['MACD-Signal']
+            if 'SMA-50' in df:
+                self.stockpoints[row_index].sma_50 = df.loc[row_index]['SMA-50']
+            if 'SMA-200' in df:
+                self.stockpoints[row_index].sma_200 = df.loc[row_index]['SMA-200']
         try:
             db.session.commit() # commits new signals
         except:
@@ -200,6 +214,14 @@ class StockPoint(db.Model):
     close = db.Column(db.Float(precision=2 ,asdecimal=True), nullable=False)
     adj_close = db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
     volume = db.Column(db.Integer, nullable=False)
+    avg_volume_3_months = db.Column(db.Integer, nullable=True)  
+    sma_50 = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
+    sma_200 = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
+    
+    # 52 week high/low is the intra-day high/low, not the closing prices
+    high_52_weeks = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
+    low_52_weeks = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
+    
     rsi = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
 
     # stores the current MACD values (MACD and the MACD-Signal line)
@@ -287,6 +309,90 @@ class Signal(db.Model):
         attributes. Each signal has an evaluate method
         '''
         pass
+
+class SMA(object):
+    ''' Class to calculate the simple moving average '''
+
+    def __init__(self, df, span):
+        self.df = df
+        self.span = span
+
+    def calculate(self):
+        col = 'SMA-%s' % self.span
+        self.df[col] = pd.rolling_mean(self.df['Adj Close'], self.span)
+        return self.df
+
+class SMA50PriceCross(Signal):
+
+    __mapper_args__ = {'polymorphic_identity' : 'SMA50-Price-Cross'}
+
+    BEFORE = 10
+    AFTER = 1
+    DATA_REQ = BEFORE + AFTER  # Data Requirements 
+    EXPIRATION_DAYS = 5
+    WEIGHT = 0.5
+
+    def __init__(self, df):
+        self.df = df
+        self.expiration_date = dt.date.today() + \
+                               dt.timedelta(days=self.EXPIRATION_DAYS)
+        self.weight = self.WEIGHT
+
+    def __repr__(self):
+        return "<SMA50PriceCross(id='%s', stock_id='%s', is_buy_signal='%s', " \
+            "signal_type='%s', created_date='%s', expiration_date='%s', " \
+            "weight='%s', description='%s')>" % \
+            (self.id, self.stock_id, self.is_buy_signal, \
+             self.signal_type, self.created_date, self.expiration_date, \
+             self.weight, self.description)
+    
+    def evaluate(self):
+        if (self.df['SMA-50'][-self.DATA_REQ:-self.AFTER] >= \
+                self.df['Adj Close'][-self.DATA_REQ:-self.AFTER]).all() and \
+        (self.df['SMA-50'][-self.AFTER:] < self.df['Adj Close'][-self.AFTER:]).all():
+            self.is_buy_signal = True
+            self.description = "Price just turned above the 50 Day Simple Moving Average."
+        elif (self.df['SMA-50'][-self.DATA_REQ:-self.AFTER] <= \
+                self.df['Adj Close'][-self.DATA_REQ:-self.AFTER]).all() and \
+        (self.df['SMA-50'][-self.AFTER:] > self.df['Adj Close'][-self.AFTER:]).all():
+            self.is_buy_signal = False
+            self.description = "Price just dropped below the 50 Day Simple Moving Average."
+
+class SMA200PriceCross(Signal):
+
+    __mapper_args__ = {'polymorphic_identity' : 'SMA200-Price-Cross'}
+
+    BEFORE = 50 
+    AFTER = 1
+    DATA_REQ = BEFORE + AFTER  # Data Requirements 
+    EXPIRATION_DAYS = 5
+    WEIGHT = 1
+
+    def __init__(self, df):
+        self.df = df
+        self.expiration_date = dt.date.today() + \
+                               dt.timedelta(days=self.EXPIRATION_DAYS)
+        self.weight = self.WEIGHT
+
+    def __repr__(self):
+        return "<SMA200PriceCross(id='%s', stock_id='%s', is_buy_signal='%s', " \
+            "signal_type='%s', created_date='%s', expiration_date='%s', " \
+            "weight='%s', description='%s')>" % \
+            (self.id, self.stock_id, self.is_buy_signal, \
+             self.signal_type, self.created_date, self.expiration_date, \
+             self.weight, self.description)
+    
+    def evaluate(self):
+        if (self.df['SMA-200'][-self.DATA_REQ:-self.AFTER] >= \
+                self.df['Adj Close'][-self.DATA_REQ:-self.AFTER]).all() and \
+        (self.df['SMA-200'][-self.AFTER:] < self.df['Adj Close'][-self.AFTER:]).all():
+            self.is_buy_signal = True
+            self.description = "Price just turned above the 200 Day Simple Moving Average."
+        elif (self.df['SMA-200'][-self.DATA_REQ:-self.AFTER] <= \
+                self.df['Adj Close'][-self.DATA_REQ:-self.AFTER]).all() and \
+        (self.df['SMA-200'][-self.AFTER:] > self.df['Adj Close'][-self.AFTER:]).all():
+            self.is_buy_signal = False
+            self.description = "Price just dropped below the 200 Day Simple Moving Average."
 
 class RSI(object):
 

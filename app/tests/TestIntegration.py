@@ -4,6 +4,62 @@ from app.models import MACDSignalCross, MACDCenterCross
 import StockFactory as SF
 from app import db
 
+class TestSMA50SignalInteraction(unittest.TestCase):
+    ''' This class tests that SMA50Price signals are appropriately added
+    (or not added) to a Stock's signal list. '''
+
+    def setUp(self):
+        db.create_all()
+        self.stock = SF.build_stock()
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_triggered_signal_is_appended_to_stock(self):
+        ''' There needs to be a non-NaN SMA value for at least 10 days
+        for the signal to trigger.'''
+        df = SF.build_dataframe(values={'Adj Close':[1]*50+[50]*10+[1]})
+        self.stock._save_dataframe(df)
+        assert(len(self.stock.signals) == 0)
+        self.stock.calculate_indicators()
+        assert(any(x.signal_type == 'SMA50-Price-Cross' for x in self.stock.signals))
+    
+    def test_untriggered_signal_is_not_appended_to_stock(self):
+        df = SF.build_dataframe(values={'Adj Close':[1]*50+[50]*10})
+        self.stock._save_dataframe(df)
+        print self.stock.signals
+        assert(len(self.stock.signals) == 0)
+        self.stock.calculate_indicators()
+        assert(all(x.signal_type != 'SMA50-Price-Cross' for x in self.stock.signals))
+
+
+class TestSMA200SignalInteraction(unittest.TestCase):
+    ''' This class tests that SMA200Price signals are appropriately added
+    (or not added) to a Stock's signal list. '''
+
+    def setUp(self):
+        db.create_all()
+        self.stock = SF.build_stock()
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_triggered_signal_is_appended_to_stock(self):
+        ''' There needs to be a non-NaN SMA value for at least 50 days
+        for the signal to trigger.'''
+        df = SF.build_dataframe(values={'Adj Close':[1]*200+[50]*50+[1]})
+        self.stock._save_dataframe(df)
+        assert(len(self.stock.signals) == 0)
+        self.stock.calculate_indicators()
+        assert(any(x.signal_type == 'SMA200-Price-Cross' for x in self.stock.signals))
+    
+    def test_untriggered_signal_is_not_appended_to_stock(self):
+        df = SF.build_dataframe(values={'Adj Close':[1]*200+[50]*50})
+        self.stock._save_dataframe(df)
+        assert(len(self.stock.signals) == 0)
+        self.stock.calculate_indicators()
+        assert(all(x.signal_type != 'SMA200-Price-Cross' for x in self.stock.signals))
+
 class TestRSISignalInteraction(unittest.TestCase):
     ''' This class tests that RSI signals are appropriately added
     (or not added) to a Stock's signal list. '''
@@ -15,19 +71,21 @@ class TestRSISignalInteraction(unittest.TestCase):
     def tearDown(self):
         db.drop_all()
 
-    def test_trigged_signal_is_appended_to_stock(self):
+    def test_triggered_signal_is_appended_to_stock(self):
         df = SF.build_dataframe(values={'Adj Close': [45.15, 46.26, 46.5, 46.23, 46.08, 46.03, 46.83, 47.69, 47.54, 49.25, 49.23, 48.2, 47.57, 47.61, 48.08, 47.21, 50.76]})
         self.stock._save_dataframe(df)
+        print self.stock.signals
         assert(len(self.stock.signals) == 0)
         self.stock.calculate_indicators()
         assert(any(x.signal_type == 'RSI' for x in self.stock.signals))
     
-    def test_untrigged_signal_is_not_appended_to_stock(self):
+    def test_untriggered_signal_is_not_appended_to_stock(self):
         df = SF.build_dataframe(values={'Adj Close': [45.15, 46.26, 46.5, 46.23, 46.08, 46.03, 46.83, 47.69, 47.54, 49.25, 49.23, 48.2, 47.57, 47.61, 48.08, 47.21, 47.76]})
         self.stock._save_dataframe(df)
+        print self.stock.signals
         assert(len(self.stock.signals) == 0)
         self.stock.calculate_indicators()
-        assert(len(self.stock.signals) == 0)
+        assert(all(x.signal_type != 'RSI' for x in self.stock.signals))
 
 class TestMACDCenterCrossInteraction(unittest.TestCase):
     ''' This class tests that MACD Center Cross signals
@@ -41,7 +99,7 @@ class TestMACDCenterCrossInteraction(unittest.TestCase):
     def tearDown(self):
         db.drop_all()
 
-    def test_trigged_signal_is_appended_to_stock(self):
+    def test_triggered_signal_is_appended_to_stock(self):
         df = SF.build_dataframe(values={'Adj Close':[10,1,2,3,4,5,6]}) 
         self.stock._save_dataframe(df)
         assert(len(self.stock.signals) == 0)
@@ -49,12 +107,12 @@ class TestMACDCenterCrossInteraction(unittest.TestCase):
         print self.stock.signals
         assert(any(x.signal_type == 'MACD-Center-Line-Crossover' for x in self.stock.signals))
     
-    def test_untrigged_signal_is_not_appended_to_stock(self):
+    def test_untriggered_signal_is_not_appended_to_stock(self):
         df = SF.build_dataframe(values={'Adj Close':[10,1,2,3,4,5]}) 
         self.stock._save_dataframe(df)
         assert(len(self.stock.signals) == 0)
         self.stock.calculate_indicators()
-        assert(len(self.stock.signals) == 0)
+        assert(all(x.signal_type != 'MACD-Center-Line-Crossover' for x in self.stock.signals))
 
 class TestMACDSignalCrossInteraction(unittest.TestCase):
     ''' This class tests that MACD Signal Cross signals
@@ -68,16 +126,16 @@ class TestMACDSignalCrossInteraction(unittest.TestCase):
     def tearDown(self):
         db.drop_all()
 
-    def test_trigged_signal_is_appended_to_stock(self):
+    def test_triggered_signal_is_appended_to_stock(self):
         df = SF.build_dataframe(values={'Adj Close':[5,4,3,2,1,2,4]})
         self.stock._save_dataframe(df)
         assert(len(self.stock.signals) == 0)
         self.stock.calculate_indicators()
         assert(any(x.signal_type == 'MACD-Signal-Line-Crossover' for x in self.stock.signals))
     
-    def test_untrigged_signal_is_not_appended_to_stock(self):
+    def test_untriggered_signal_is_not_appended_to_stock(self):
         df = SF.build_dataframe(values={'Adj Close':[5,4,3,2,1,2,3]}) 
         self.stock._save_dataframe(df)
         assert(len(self.stock.signals) == 0)
         self.stock.calculate_indicators()
-        assert(len(self.stock.signals) == 0)
+        assert(all(x.signal_type != 'MACD-Signal-Line-Crossover' for x in self.stock.signals))

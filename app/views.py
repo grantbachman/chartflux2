@@ -25,6 +25,8 @@ def chart():
         point = db.session.query(StockPoint,Stock).filter(Stock.id == StockPoint.stock_id).filter(Stock.symbol == symbol).filter(StockPoint.date == StockPoint.last_known_date()).first()
     except:
         abort(404, 'We could\'t find that stock for some reason. Right now we only have data for the NASDAQ and NYSE. If the stock you entered WAS in either of those exchanges, well, then we done fucked up.')
+    if point is None:
+        abort(404, 'Uh, we know that symbol, but don\'t have any data for it...')
     change = format(point[0].close - point[0].open, '.2f')
     change_percent = format((point[0].close - point[0].open)/point[0].open*100, '.2f')
     change_tup = tuple([change, change_percent])

@@ -231,13 +231,17 @@ class TestStock(unittest.TestCase):
         assert(StockPoint.query.count() == 2)
 
     def test_update_dataframe(self):
-        ''' Should update the RSI, MACD, MACD-Signal '''
+        ''' Should update the RSI, MACD, MACD-Signal, and SMAs '''
         df = SF.build_dataframe(values={'RSI':[1],'MACD':[2],'MACD-Signal':[3]})
         self.stock._save_dataframe(df) 
         df['RSI'] = 4
         df['MACD'] = 5
         df['MACD-Signal'] = 6
+        df['SMA-50'] = 5
+        df['SMA-200'] = 5
         self.stock.update_dataframe(df)
         assert(self.stock.stockpoints[0].rsi == 4)
         assert(self.stock.stockpoints[0].macd == 5)
         assert(self.stock.stockpoints[0].macd_signal == 6)
+        assert(self.stock.stockpoints[0].sma_50 == 5)
+        assert(self.stock.stockpoints[0].sma_200 == 5)
