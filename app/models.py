@@ -166,17 +166,29 @@ class Stock(db.Model):
             logging.warning('Error with %s. Tried to save dataframe, but the transaction was rolled back.' % self)
             db.session.rollback()
 
+    def _should_fetch(self):
+        ''' Checks if there are any weekdays between the last point
+        we have saved and today. It's a better method of determination
+        than just checking if it's currently the weekend or not as it
+        handles long periods of not grabbing data. Plus, any() is a 
+        short circuit function so it's only marginally less efficient.
+        '''
+        last_point_date = self.stockpoints[-1].date
+        difference = (today() - last_point_date).days
+        return any([(today() - dt.timedelta(days=x)).weekday() not
+                    in (5,6) for x in range(1,difference)])
+
     def fetch_and_save_missing_ohlc(self):
         ''' Grabs the last point of the Stock's data to figure out for what 
         dates it needs to query. Then saves off the data in the Stock's table.
         '''
+        if not self._should_fetch():
+            return
         next_point_date = self.stockpoints[-1].date + dt.timedelta(days=1)
-        if next_point_date.weekday() not in (5,6) and \
-        next_point_date != today():  # they don't provide today's data
-            yesterday = today() - dt.timedelta(days=1) 
-            df = self.fetch_ohlc_from_yahoo(next_point_date, yesterday)
-            if df is not None:
-                self._save_dataframe(df)               
+        yesterday = today() - dt.timedelta(days=1) 
+        df = self.fetch_ohlc_from_yahoo(next_point_date, yesterday)
+        if df.shape[0] > 0: # save if there's at least one row
+            self._save_dataframe(df)               
     
     def fetch_and_save_all_ohlc(self):
         ''' Fetches the model's maximum number of data points '''

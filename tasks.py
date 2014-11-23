@@ -113,10 +113,6 @@ def parse_other(market):
                 name = split[1]
                 logging.info('Fetching data. Market: %s, Symbol: %s, Company Name: %s', market, symbol, name)
                 create_or_update_stock(symbol, name, market)
-                if stock is None:
-                    logging.info('New stock (not currently in our database): Market: %s, Symbol: %s, Company Name: %s', market, symbol, name)
-                    stock = Stock(symbol=symbol,name=name,market=market)
-                df = stock.get_dataframe()
     logging.info('Finished parsing %s file.', market)
 
 

@@ -4,33 +4,35 @@
 <div class="row">
 	<div class="col-md-12">
 		<h4>{{ point[1].name }}</h4>
-		
-		<div>
-			{{ change_tup[0] }}&nbsp({{ change_tup[1] }}%)
-		</div>
-		
 	</div>
 </div>
 <div class="row table-responsive">
 <div class="col-md-4">
 <table class="table table-bordered">
 	<tr>
-		<td>Open:&nbsp&nbsp{{ point[0].open }}</td>
-		<td>RSI:&nbsp&nbsp{{ point[0].rsi}}</td>
+        <td>Open:&nbsp&nbsp{{ point[0].open | ohlc }}</td>
+        <td>Change:&nbsp{% if point[0].close - point[0].open > 0 %}
+                            &#x2191; <!-- UP arrow -->
+                        {% else %}
+                            &#x2193;
+                        {% endif %} <!-- DOWN arrow -->
+                        {{ (point[0].close - point[0].open) | ohlc }} ({{ (((point[0].close - point[0].open)/point[0].open)*100) | ohlc }}%)</td>
 	</tr>
 	<tr>
-		<td>High:&nbsp&nbsp{{ point[0].high }}</td>
-		<td>MACD:&nbsp&nbsp{{ point[0].macd}}</td>
+		<td>High:&nbsp&nbsp{{ point[0].high | ohlc }}</td>
+        <td>52 Week High:&nbsp&nbsp{{ point[0].high_52_weeks | ohlc }}</td>
 	</tr>
 	<tr>
-		<td>Low:&nbsp&nbsp{{ point[0].low }}</td>
-		<td>MACD Signal:&nbsp&nbsp{{ point[0].macd_signal}}</td>
+		<td>Low:&nbsp&nbsp{{ point[0].low | ohlc }}</td>
+        <td>52 Week Low:&nbsp&nbsp{{ point[0].low_52_weeks | ohlc }}</td>
 	</tr>
 	<tr>
-		<td>Close:&nbsp&nbsp{{ point[0].close }}</td>
+		<td>Close:&nbsp&nbsp{{ point[0].close | ohlc }}</td>
+		<td>Adj Close:&nbsp&nbsp{{ point[0].adj_close | ohlc }}</td>
 	</tr>
 	<tr>
-		<td>Adj Close:&nbsp&nbsp{{ point[0].adj_close }}</td>
+		<td>Volume:&nbsp&nbsp{{ point[0].volume | volume }}</td>
+        <td>Avg Volume (3m):&nbsp&nbsp{{ point[0].avg_volume_3_months | volume }}</td>
 	</tr>
 </table>
 </div>

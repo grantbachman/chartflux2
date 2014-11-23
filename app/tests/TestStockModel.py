@@ -193,6 +193,24 @@ class TestStock(unittest.TestCase):
         MockDataReader.assert_called_with("TSLA","yahoo",start,end)
 
     @patch('app.models.today')
+    def test_should_fetch_should_fetch(self, mock_today):
+        ''' _should_fetch should return True if there's a weekday
+        between the last point date and today '''
+        mock_today.return_value = dt.date(2014,11,22)
+        df = SF.build_dataframe(end_date=dt.date(2014,11,20))
+        self.stock._save_dataframe(df)
+        assert(self.stock._should_fetch() == True)
+
+    @patch('app.models.today')
+    def test_should_fetch_should_not_fetch(self, mock_today):
+        ''' _should_fetch should return False if there are only
+        weekend days between the last point date and today '''
+        mock_today.return_value = dt.date(2014,11,24)
+        df = SF.build_dataframe(end_date=dt.date(2014,11,21))
+        self.stock._save_dataframe(df)
+        assert(self.stock._should_fetch() == False)
+
+    @patch('app.models.today')
     @patch('app.models.Stock.fetch_ohlc_from_yahoo')
     def test_fetch_and_save_missing_ohlc(self, mock_fetch, mock_today):
         mock_today.return_value = dt.date(2014,10,10)

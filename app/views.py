@@ -18,25 +18,24 @@ def index():
                            buy_stocks=buy_stocks,
                            sell_stocks=sell_stocks)
 
+@app.template_filter('ohlc')
+def ohlc_filter(val):
+    ''' Jinja2 filter that'll format a float with exactly 2 decimal
+    place precision. If the value is None it'll return N/A '''
+    return format(val, '.2f') if val is not None else 'N/A'
+
+@app.template_filter('volume')
+def ohlc_filter(val):
+    ''' Jinja2 filter that'll filter a large int to include commas '''
+    return locale.format("%d", val, grouping=True) if val is not None else 'N/A'
+
 @app.route('/chart')
 def chart():
     symbol = request.args.get('symbol').upper()
     try:
-        point = db.session.query(StockPoint,Stock).filter(Stock.id == StockPoint.stock_id).filter(Stock.symbol == symbol).filter(StockPoint.date == StockPoint.last_known_date()).first()
+        point = db.session.query(StockPoint,Stock).filter(Stock.id == StockPoint.stock_id).filter(Stock.symbol == symbol).order_by(StockPoint.date.desc()).first()
     except:
         abort(404, 'We could\'t find that stock for some reason. Right now we only have data for the NASDAQ and NYSE. If the stock you entered WAS in either of those exchanges, well, then we done fucked up.')
     if point is None:
         abort(404, 'Uh, we know that symbol, but don\'t have any data for it...')
-    change = format(point[0].close - point[0].open, '.2f')
-    change_percent = format((point[0].close - point[0].open)/point[0].open*100, '.2f')
-    change_tup = tuple([change, change_percent])
-    point[0].close = format(point[0].close,'.2f')
-    point[0].adj_close = format(point[0].adj_close,'.2f')
-    point[0].open = format(point[0].open,'.2f')
-    point[0].high = format(point[0].high,'.2f')
-    point[0].low = format(point[0].low,'.2f')
-    point[0].rsi = format(point[0].rsi,'.2f') if point[0].rsi is not None else 'N/A'
-    point[0].macd = format(point[0].macd,'.2f') if point[0].macd is not None else 'N/A'
-    point[0].macd_signal = format(point[0].macd_signal,'.2f') if point[0].macd_signal is not None else 'N/A'
-    point[0].volume = locale.format("%d",point[0].volume,grouping=True)
-    return render_template('chart.html', point=point, change_tup=change_tup)
+    return render_template('chart.html', point=point)

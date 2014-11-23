@@ -34,11 +34,3 @@ class TestViews(unittest.TestCase):
         self.stock._save_dataframe(df)
         rv = self.app.get('/chart?symbol=TSLA')
         assert('404' not in rv.data)
-
-    def test_NA_fields(self):
-        self.stock = SF.build_stock()
-        df = SF.build_dataframe()
-        #With only 10 data points, there won't exist an RSI value
-        self.stock._save_dataframe(df)
-        rv = self.app.get('/chart?symbol=TSLA')
-        assert('RSI:&nbsp&nbspN/A' in rv.data)
