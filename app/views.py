@@ -3,6 +3,7 @@ from app.models import Stock, StockPoint, today
 import datetime as dt
 import locale
 from flask import render_template, request, abort, jsonify
+from collections import defaultdict
 
 locale.setlocale(locale.LC_ALL, 'en_US') # for grouping large numbers with commas
 
@@ -33,9 +34,30 @@ def ohlc_filter(val):
 def chart():
     symbol = request.args.get('symbol').upper()
     try:
-        point = db.session.query(StockPoint,Stock).filter(Stock.id == StockPoint.stock_id).filter(Stock.symbol == symbol).order_by(StockPoint.date.desc()).first()
+        stock = Stock.query.filter(Stock.symbol == symbol).first()
+        point = stock.stockpoints[-1]
     except:
-        abort(404, 'We could\'t find that stock for some reason. Right now we only have data for the NASDAQ and NYSE. If the stock you entered WAS in either of those exchanges, well, then we done fucked up.')
+        abort(404, 'Something went wrong retrieving the data for %s' % symbol)
     if point is None:
         abort(404, 'Uh, we know that symbol, but don\'t have any data for it...')
-    return render_template('chart.html', point=point)
+    # group signals by whether they are buy or sell
+    signals = defaultdict(list)
+    for sig in stock.signals:
+        if sig.expiration_date >= today():
+            signals[sig.is_buy_signal].append(sig)
+    signals['Buy'] = signals[True]
+    signals['Sell'] = signals[False]
+    del signals[True]
+    del signals[False]
+    if len(signals['Buy']) == len(signals['Sell']):
+        recommend = 'None'
+    elif len(signals['Buy']) > len(signals['Sell']):
+        recommend = 'Buy'
+    else:
+        recommend = 'Sell'
+    return render_template('chart.html',
+                           stock=stock,
+                           point=point,
+                           signals=signals,
+                           recommend=recommend
+                           )

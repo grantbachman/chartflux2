@@ -170,8 +170,7 @@ class Stock(db.Model):
         ''' Checks if there are any weekdays between the last point
         we have saved and today. It's a better method of determination
         than just checking if it's currently the weekend or not as it
-        handles long periods of not grabbing data. Plus, any() is a 
-        short circuit function so it's only marginally less efficient.
+        handles long periods of not grabbing data.
         '''
         last_point_date = self.stockpoints[-1].date
         difference = (today() - last_point_date).days

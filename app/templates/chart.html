@@ -3,36 +3,74 @@
 
 <div class="row">
 	<div class="col-md-12">
-		<h4>{{ point[1].name }}</h4>
+		<h4>{{ stock.name }}</h4>
 	</div>
+</div>
+<div class="row">
+    <div class="col-md-12">
+        <h5>Recommendation:&nbsp&nbsp{{ recommend }}</h5>
+    </div>
+</div>
+
+<div class="row table-responsive">
+<div class="col-md-6">
+<table class="table">
+    <tr>
+        <td class="col-md-3">Buy Signals</td>
+        <td class="col-md-9">
+            {% if not signals['Buy'] %}None
+            {% else %}
+            <ul class="list-group">
+                {% for signal in signals['Buy'] %}
+                <li class="list-group-item list-group-item-success">{{ signal.description }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <td class="col-md-3">Sell Signals</td>
+        <td class="col-md-9">
+            {% if not signals['Sell'] %}None 
+            {% else %}
+            <ul class="list-group">
+                {% for signal in signals['Sell'] %}
+                <li class="list-group-item list-group-item-danger">{{ signal.description }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </td>
+    </tr>
+</table>
+</div>
 </div>
 <div class="row table-responsive">
 <div class="col-md-4">
 <table class="table table-bordered">
 	<tr>
-        <td>Open:&nbsp&nbsp{{ point[0].open | ohlc }}</td>
-        <td>Change:&nbsp{% if point[0].close - point[0].open > 0 %}
+        <td>Open:&nbsp&nbsp{{ point.open | ohlc }}</td>
+        <td>Change:&nbsp{% if point.close - point.open > 0 %}
                             &#x2191; <!-- UP arrow -->
                         {% else %}
                             &#x2193;
                         {% endif %} <!-- DOWN arrow -->
-                        {{ (point[0].close - point[0].open) | ohlc }} ({{ (((point[0].close - point[0].open)/point[0].open)*100) | ohlc }}%)</td>
+                        {{ (point.close - point.open) | ohlc }} ({{ (((point.close - point.open)/point.open)*100) | ohlc }}%)</td>
 	</tr>
 	<tr>
-		<td>High:&nbsp&nbsp{{ point[0].high | ohlc }}</td>
-        <td>52 Week High:&nbsp&nbsp{{ point[0].high_52_weeks | ohlc }}</td>
+		<td>High:&nbsp&nbsp{{ point.high | ohlc }}</td>
+        <td>52 Week High:&nbsp&nbsp{{ point.high_52_weeks | ohlc }}</td>
 	</tr>
 	<tr>
-		<td>Low:&nbsp&nbsp{{ point[0].low | ohlc }}</td>
-        <td>52 Week Low:&nbsp&nbsp{{ point[0].low_52_weeks | ohlc }}</td>
+		<td>Low:&nbsp&nbsp{{ point.low | ohlc }}</td>
+        <td>52 Week Low:&nbsp&nbsp{{ point.low_52_weeks | ohlc }}</td>
 	</tr>
 	<tr>
-		<td>Close:&nbsp&nbsp{{ point[0].close | ohlc }}</td>
-		<td>Adj Close:&nbsp&nbsp{{ point[0].adj_close | ohlc }}</td>
+		<td>Close:&nbsp&nbsp{{ point.close | ohlc }}</td>
+		<td>Adj Close:&nbsp&nbsp{{ point.adj_close | ohlc }}</td>
 	</tr>
 	<tr>
-		<td>Volume:&nbsp&nbsp{{ point[0].volume | volume }}</td>
-        <td>Avg Volume (3m):&nbsp&nbsp{{ point[0].avg_volume_3_months | volume }}</td>
+		<td>Volume:&nbsp&nbsp{{ point.volume | volume }}</td>
+        <td>Avg Volume (3m):&nbsp&nbsp{{ point.avg_volume_3_months | volume }}</td>
 	</tr>
 </table>
 </div>
