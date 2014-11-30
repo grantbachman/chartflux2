@@ -462,7 +462,13 @@ class RSISignal(Signal):
     OVERBOUGHT = 70
     OVERSOLD = 30
     WEIGHT = 0.5
-    EXPIRATION_DAYS = 3  # Number of days until expiration
+    # Min number of days MACD must be on one side before crossing
+    BEFORE = 10 
+    # After crossing, min number of days it must stay on that side before the
+    # signal fires 
+    AFTER = 1
+    DATA_REQ = BEFORE + AFTER  # Data Requirements 
+    EXPIRATION_DAYS = 5  # Number of days until expiration
 
     def __init__(self, df):
         self.df = df
@@ -482,18 +488,24 @@ class RSISignal(Signal):
 
 
     def evaluate(self):
-        ''' Checks the last row of the dataframe, which is the most
-        recent date, and checks it against the OVERBOUGHT and OVERSOLD
-        thresholds. If that point meets the criteria, the signal's
-        is_buy_signal and description are updated.
-        '''
-        cur_rsi = self.df['RSI'][len(self.df)-1]
-        if cur_rsi >= RSISignal.OVERBOUGHT:
+        """ RSI can remain overbought or oversold for long periods of
+        time. Counter-intuitively, when the RSI falls from
+        overbought territory, it signals a swing towards negative
+        momentum (i.e. sell signal), and vice versa.
+        """
+        last = self.df['RSI'][len(self.df)-RSISignal.DATA_REQ:]
+        if (last.iloc[:RSISignal.BEFORE] >= RSISignal.OVERBOUGHT).all() and \
+        (last.iloc[RSISignal.BEFORE:] < RSISignal.OVERBOUGHT).all():
             self.is_buy_signal = False
-            self.description = "RSI is %s" % cur_rsi
-        elif cur_rsi <= RSISignal.OVERSOLD:
+            self.description = "RSI (%s) is returning from overbought" \
+              " territory, signaling a negative change in momentum." \
+              % format(last.iloc[-1], '.2f')
+        elif (last.iloc[:RSISignal.BEFORE] <= RSISignal.OVERSOLD).all() and \
+        (last.iloc[RSISignal.BEFORE:] > RSISignal.OVERSOLD).all():
             self.is_buy_signal = True
-            self.description = "RSI is '%s'" % cur_rsi
+            self.description = "RSI (%s) is returning from oversold" \
+              " territory, signaling a positive change in momentum." \
+              % format(last.iloc[-1], '.2f')
         else:
             pass
 
@@ -570,14 +582,14 @@ class MACDSignalCross(Signal):
             last['MACD-Signal'][MACDSignalCross.BEFORE:]).all():
             self.is_buy_signal = True
             self.description = "MACD (%s) just turned above the Signal Line" \
-                " (%s)" % (last['MACD'].iloc[-1], last['MACD-Signal'].iloc[-1])
+                " (%s)" % (format(last['MACD'].iloc[-1],'.2f'), format(last['MACD-Signal'].iloc[-1],'.2f'))
         elif (last['MACD'][:MACDSignalCross.BEFORE] >= \
             last['MACD-Signal'][:MACDSignalCross.BEFORE]).all() and \
            (last['MACD'][MACDSignalCross.BEFORE:] < \
             last['MACD-Signal'][MACDSignalCross.BEFORE:]).all():
             self.is_buy_signal = False 
             self.description = "MACD (%s) just dropped below the Signal Line" \
-                " (%s)" % (last['MACD'].iloc[-1], last['MACD-Signal'].iloc[-1])
+                " (%s)" % (format(last['MACD'].iloc[-1],'.2f'), format(last['MACD-Signal'].iloc[-1],'.2f'))
         else:
             pass
 
@@ -632,13 +644,13 @@ class MACDCenterCross(Signal):
                                    dt.timedelta(days=MACDCenterCross.EXPIRATION_DAYS)
             self.weight = MACDCenterCross.WEIGHT
             self.is_buy_signal = True
-            self.description = "MACD (%s) just turned positive" % last.iloc[-1]
+            self.description = "MACD (%s) just turned positive." % format(last.iloc[-1],'.2f')
         elif (last[:MACDCenterCross.BEFORE] >= 0).all() and \
                 (last[MACDCenterCross.BEFORE:] < 0).all():
             self.expiration_date = dt.date.today() + \
                                    dt.timedelta(days=MACDCenterCross.EXPIRATION_DAYS)
             self.weight = MACDCenterCross.WEIGHT
             self.is_buy_signal = False 
-            self.description = "MACD (%s) just turned negative" % last.iloc[-1]
+            self.description = "MACD (%s) just turned negative." % format(last.iloc[-1],'.2f')
         else:
             pass

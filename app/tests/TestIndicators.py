@@ -210,7 +210,8 @@ class TestRSISignal(unittest.TestCase):
         db.drop_all()
 
     def test_RSI_triggers_buy_signal(self):
-        df = DataFrame({'RSI': [30]})
+        df = SF.build_dataframe(values={'RSI':[30]*10+[31]})
+        print df
         signal = RSISignal(df)
         signal.evaluate()
         print signal
@@ -218,7 +219,7 @@ class TestRSISignal(unittest.TestCase):
         assert(signal.is_buy_signal == True)
 
     def test_RSI_triggers_sell_signal(self):
-        df = DataFrame({'RSI': [70]})
+        df = SF.build_dataframe(values={'RSI':[71]*10+[69]})
         signal = RSISignal(df)
         signal.evaluate()
         assert(signal.triggered() == True)

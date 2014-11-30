@@ -72,7 +72,7 @@ class TestRSISignalInteraction(unittest.TestCase):
         db.drop_all()
 
     def test_triggered_signal_is_appended_to_stock(self):
-        df = SF.build_dataframe(values={'Adj Close': [45.15, 46.26, 46.5, 46.23, 46.08, 46.03, 46.83, 47.69, 47.54, 49.25, 49.23, 48.2, 47.57, 47.61, 48.08, 47.21, 50.76]})
+        df = SF.build_dataframe(values={'Adj Close':[x+1 for x in range(24)]+[10]})
         self.stock._save_dataframe(df)
         print self.stock.signals
         assert(len(self.stock.signals) == 0)
@@ -80,7 +80,7 @@ class TestRSISignalInteraction(unittest.TestCase):
         assert(any(x.signal_type == 'RSI' for x in self.stock.signals))
     
     def test_untriggered_signal_is_not_appended_to_stock(self):
-        df = SF.build_dataframe(values={'Adj Close': [45.15, 46.26, 46.5, 46.23, 46.08, 46.03, 46.83, 47.69, 47.54, 49.25, 49.23, 48.2, 47.57, 47.61, 48.08, 47.21, 47.76]})
+        df = SF.build_dataframe(values={'Adj Close':[x+1 for x in range(25)]})
         self.stock._save_dataframe(df)
         print self.stock.signals
         assert(len(self.stock.signals) == 0)

@@ -43,6 +43,9 @@ celery.conf.CELERYBEAT_SCHEDULE =  {
 }
 
 @celery.task
+def download_stock_files_task(): 
+    download_stock_files()
+
 def download_stock_files(): 
     logging.info('Begin downloading stock files...')
     try:
@@ -56,6 +59,9 @@ def download_stock_files():
         logging.warning("Couldn't download the nightly NASDAQ/NYSE files. Error message: %s", e)
 
 @celery.task
+def parse_stock_files_task():
+    parse_stock_files()
+
 def parse_stock_files():
     '''File information here: http://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs'''
     logging.info('Begin parsing the files and refreshing stock data.')
