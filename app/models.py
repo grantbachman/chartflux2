@@ -54,8 +54,15 @@ class Stock(db.Model):
             .group_by(Stock.id).having(func.count(Signal.stock_id) > 1).all()
         return sell_list
 
+    def calculate_adjusted_ohlc(self, df):
+        df['Adj High'] = df['High'] * (df['Adj Close']/df['Close'])
+        df['Adj Low'] = df['Low'] * (df['Adj Close']/df['Close'])
+        df['Adj Open'] = df['Open'] * (df['Adj Close']/df['Close'])
+        return df
+
     def calculate_indicators(self):
         df = self.load_dataframe_from_db()
+        df = self.calculate_adjusted_ohlc(df)
         df = RSI(df).calculate()
         df = MACD(df).calculate()
         df = SMA(df, 50).calculate()
@@ -88,16 +95,14 @@ class Stock(db.Model):
         create anything new, just updates. '''
         df = df.reset_index()
         for row_index, row in df.iterrows():
-            if 'RSI' in df:
-                self.stockpoints[row_index].rsi = df['RSI'][row_index]
-            if 'MACD' in df:
-                self.stockpoints[row_index].macd = df.loc[row_index]['MACD']
-            if 'MACD-Signal' in df:
-                self.stockpoints[row_index].macd_signal = df.loc[row_index]['MACD-Signal']
-            if 'SMA-50' in df:
-                self.stockpoints[row_index].sma_50 = df.loc[row_index]['SMA-50']
-            if 'SMA-200' in df:
-                self.stockpoints[row_index].sma_200 = df.loc[row_index]['SMA-200']
+            self.stockpoints[row_index].rsi = df.loc[row_index]['RSI']
+            self.stockpoints[row_index].macd = df.loc[row_index]['MACD']
+            self.stockpoints[row_index].macd_signal = df.loc[row_index]['MACD-Signal']
+            self.stockpoints[row_index].sma_50 = df.loc[row_index]['SMA-50']
+            self.stockpoints[row_index].sma_200 = df.loc[row_index]['SMA-200']
+            self.stockpoints[row_index].adj_open = df.loc[row_index]['Adj Open']
+            self.stockpoints[row_index].adj_high = df.loc[row_index]['Adj High']
+            self.stockpoints[row_index].adj_low = df.loc[row_index]['Adj Low']
         try:
             db.session.commit() # commits new signals
         except:
@@ -113,7 +118,7 @@ class Stock(db.Model):
     def load_dataframe_from_db(self):
         df = pd.DataFrame(columns = ('Date','Open','High','Low','Close', 
                                      'Adj Close', 'Volume', 'RSI', 'MACD',
-                                     'MACD-Signal'
+                                     'MACD-Signal', 'Adj Open', 'Adj High', 'Adj Low'
                                      )
                           )
         df.set_index(keys='Date', drop=True, inplace=True)
@@ -128,7 +133,8 @@ class Stock(db.Model):
                        ]
             
             # you can't run float on a NoneType object
-            optional = [point.rsi, point.macd, point.macd_signal]
+            optional = [point.rsi, point.macd, point.macd_signal,\
+                        point.adj_open, point.adj_high, point.adj_low]
             for opt in optional:
                 if opt is not None:
                     tempList.append(float(opt))
@@ -162,8 +168,8 @@ class Stock(db.Model):
                 self.stockpoints.append(newPoint)
         try:
             db.session.commit()
-        except:
-            logging.warning('Error with %s. Tried to save dataframe, but the transaction was rolled back.' % self)
+        except Exception as e:
+            logging.warning('%s: Error with %s. Tried to save dataframe, but the transaction was rolled back.' % (e, self))
             db.session.rollback()
 
     def _should_fetch(self):
@@ -223,11 +229,15 @@ class StockPoint(db.Model):
     high = db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
     low =  db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
     close = db.Column(db.Float(precision=2 ,asdecimal=True), nullable=False)
+    adj_open = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
+    adj_high = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
+    adj_low =  db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
     adj_close = db.Column(db.Float(precision=2, asdecimal=True), nullable=False)
     volume = db.Column(db.Integer, nullable=False)
     avg_volume_3_months = db.Column(db.Integer, nullable=True)  
     sma_50 = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
     sma_200 = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
+
     
     # 52 week high/low is the intra-day high/low, not the closing prices
     high_52_weeks = db.Column(db.Float(precision=2, asdecimal=True), nullable=True)
@@ -240,7 +250,8 @@ class StockPoint(db.Model):
     macd_signal = db.Column(db.Float(precision=2, asdecimal=True))
         
     def __init__(self, date, open, high, low, close, adj_close, volume,
-                 rsi=None, macd=None, macd_signal=None):
+                 rsi=None, macd=None, macd_signal=None, adj_open=None,
+                 adj_high=None, adj_low=None):
         ''' Required: date, open, high, low, close, adj_Close, volume
             Optional: rsi, macd, macd_signal
         '''
@@ -254,6 +265,9 @@ class StockPoint(db.Model):
         self.rsi = rsi
         self.macd = macd
         self.macd_signal = macd_signal
+        self.adj_open = adj_open
+        self.adj_high = adj_high
+        self.adj_low = adj_low
 
     @staticmethod
     def last_known_date():
@@ -320,6 +334,21 @@ class Signal(db.Model):
         attributes. Each signal has an evaluate method
         '''
         pass
+'''
+class FiftyTwoWeek(object):
+    Class to calculate the 52 Week High/Low prices
+     
+    def __init__(self, df, col):
+        col = Column to calculate (High or Low)
+        self.df = df
+        self.col = col
+
+    def calculate(self):
+        col = '52-Week-%s' % self.col
+        self.df[col] = 
+'''
+
+
 
 class SMA(object):
     ''' Class to calculate the simple moving average '''

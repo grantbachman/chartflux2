@@ -52,6 +52,17 @@ class TestStock(unittest.TestCase):
         assert(self.stock.name == "Tesla Motors Inc")
         assert(self.stock.market == "NASDAQ")
 
+    def test_calculate_adjusted_ohlc(self):
+        # 10 for 1 stock split
+        df = SF.build_dataframe(values={'High':[20,3],
+                                        'Adj Close':[1.9,2.9],
+                                        'Close':[19,2.9]})
+        df = self.stock.calculate_adjusted_ohlc(df)
+        print df
+        assert(all([col in df.columns for col in ['Adj High', 'Adj Low', 'Adj Open']]))
+        self.assertAlmostEqual(df['Adj High'].iloc[0], 2, 2)
+        self.assertAlmostEqual(df['Adj High'].iloc[1], 3, 2)
+
     def test_find_buy_stocks(self):
         ''' Stock.find_buy_stocks() should only return Stocks with 2 or
         more non-expired signals (this will probably change later) '''
@@ -164,7 +175,9 @@ class TestStock(unittest.TestCase):
         today = dt.date.today()
         self.stock.stockpoints.append(StockPoint(today, 1.5, 3.17, 1.21, 
                                                  1.76, 1.76, 123456, 30.14,
-                                                 1.21, macd_signal=None))
+                                                 1.21, macd_signal=None,
+                                                 adj_open=1.25, adj_high=1.33,
+                                                 adj_low=1.45))
         db.session.commit()
         
         df = self.stock.load_dataframe_from_db()
@@ -177,6 +190,9 @@ class TestStock(unittest.TestCase):
         assert(df.loc[today]['RSI'] == 30.14)
         assert(df.loc[today]['MACD'] == 1.21)
         assert(pd.isnull((df.loc[today]['MACD-Signal'])))
+        assert(df.loc[today]['Adj Open'] == 1.25)
+        assert(df.loc[today]['Adj High'] == 1.33)
+        assert(df.loc[today]['Adj Low'] == 1.45)
 
     @patch('app.models.Stock.fetch_ohlc_from_yahoo')
     def test_fetch_all_ohlc_from_yahoo(self,mock_fetch):   
@@ -249,17 +265,25 @@ class TestStock(unittest.TestCase):
         assert(StockPoint.query.count() == 2)
 
     def test_update_dataframe(self):
-        ''' Should update the RSI, MACD, MACD-Signal, and SMAs '''
-        df = SF.build_dataframe(values={'RSI':[1],'MACD':[2],'MACD-Signal':[3]})
+        ''' Should update the RSI, MACD, MACD-Signal, SMAs, and Adj values '''
+        df = SF.build_dataframe(values={'RSI':[1],'MACD':[2],'MACD-Signal':[3],
+                                        'Adj Open':[1.25],'Adj High':[1.33],
+                                        'Adj Low':[1.45]})
         self.stock._save_dataframe(df) 
         df['RSI'] = 4
         df['MACD'] = 5
         df['MACD-Signal'] = 6
         df['SMA-50'] = 5
         df['SMA-200'] = 5
+        df['Adj Open'] = 4
+        df['Adj High'] = 5 
+        df['Adj Low'] = 6 
         self.stock.update_dataframe(df)
         assert(self.stock.stockpoints[0].rsi == 4)
         assert(self.stock.stockpoints[0].macd == 5)
         assert(self.stock.stockpoints[0].macd_signal == 6)
         assert(self.stock.stockpoints[0].sma_50 == 5)
         assert(self.stock.stockpoints[0].sma_200 == 5)
+        assert(self.stock.stockpoints[0].adj_open == 4)
+        assert(self.stock.stockpoints[0].adj_high == 5)
+        assert(self.stock.stockpoints[0].adj_low == 6)
