@@ -63,6 +63,8 @@ class Stock(db.Model):
     def calculate_indicators(self):
         df = self.load_dataframe_from_db()
         df = self.calculate_adjusted_ohlc(df)
+        df = FiftyTwoWeek(df, 'High').calculate()
+        df = FiftyTwoWeek(df, 'Low').calculate()
         df = RSI(df).calculate()
         df = MACD(df).calculate()
         df = SMA(df, 50).calculate()
@@ -87,6 +89,14 @@ class Stock(db.Model):
         sma200_price_cross_signal.evaluate()
         if sma200_price_cross_signal.triggered() == True:
             self.signals.append(sma200_price_cross_signal)
+        fifty_two_high_signal = FiftyTwoWeekSignal(df)
+        fifty_two_high_signal.evaluate()
+        if fifty_two_high_signal.triggered() == True:
+            self.signals.append(fifty_two_high_signal)
+        fifty_two_low_signal = FiftyTwoWeekSignal(df)
+        fifty_two_low_signal.evaluate()
+        if fifty_two_low_signal.triggered() == True:
+            self.signals.append(fifty_two_high_signal)
         self.update_dataframe(df) # saves new df columns and any new signals
 
     def update_dataframe(self,df):
@@ -103,6 +113,8 @@ class Stock(db.Model):
             self.stockpoints[row_index].adj_open = df.loc[row_index]['Adj Open']
             self.stockpoints[row_index].adj_high = df.loc[row_index]['Adj High']
             self.stockpoints[row_index].adj_low = df.loc[row_index]['Adj Low']
+            self.stockpoints[row_index].high_52_weeks = df.loc[row_index]['52-Week-High']
+            self.stockpoints[row_index].low_52_weeks = df.loc[row_index]['52-Week-Low']
         try:
             db.session.commit() # commits new signals
         except:
@@ -118,7 +130,8 @@ class Stock(db.Model):
     def load_dataframe_from_db(self):
         df = pd.DataFrame(columns = ('Date','Open','High','Low','Close', 
                                      'Adj Close', 'Volume', 'RSI', 'MACD',
-                                     'MACD-Signal', 'Adj Open', 'Adj High', 'Adj Low'
+                                     'MACD-Signal', 'Adj Open', 'Adj High', 'Adj Low',
+                                     '52-Week-High', '52-Week-Low'
                                      )
                           )
         df.set_index(keys='Date', drop=True, inplace=True)
@@ -134,7 +147,8 @@ class Stock(db.Model):
             
             # you can't run float on a NoneType object
             optional = [point.rsi, point.macd, point.macd_signal,\
-                        point.adj_open, point.adj_high, point.adj_low]
+                        point.adj_open, point.adj_high, point.adj_low,
+                        point.high_52_weeks, point.low_52_weeks]
             for opt in optional:
                 if opt is not None:
                     tempList.append(float(opt))
@@ -251,7 +265,8 @@ class StockPoint(db.Model):
         
     def __init__(self, date, open, high, low, close, adj_close, volume,
                  rsi=None, macd=None, macd_signal=None, adj_open=None,
-                 adj_high=None, adj_low=None):
+                 adj_high=None, adj_low=None, high_52_weeks=None,
+                 low_52_weeks=None):
         ''' Required: date, open, high, low, close, adj_Close, volume
             Optional: rsi, macd, macd_signal
         '''
@@ -268,6 +283,8 @@ class StockPoint(db.Model):
         self.adj_open = adj_open
         self.adj_high = adj_high
         self.adj_low = adj_low
+        self.high_52_weeks = high_52_weeks
+        self.low_52_weeks = low_52_weeks
 
     @staticmethod
     def last_known_date():
@@ -334,21 +351,51 @@ class Signal(db.Model):
         attributes. Each signal has an evaluate method
         '''
         pass
-'''
+
 class FiftyTwoWeek(object):
-    Class to calculate the 52 Week High/Low prices
+    ''' Class to calculate the 52 Week High/Low prices '''
      
     def __init__(self, df, col):
-        col = Column to calculate (High or Low)
+        ''' col = Column to calculate (High or Low) '''
         self.df = df
         self.col = col
 
     def calculate(self):
         col = '52-Week-%s' % self.col
-        self.df[col] = 
-'''
+        if self.col == 'High':
+            self.df[col] = pd.rolling_max(self.df['Adj High'], 365)
+        elif self.col == 'Low':
+            self.df[col] = pd.rolling_min(self.df['Adj Low'], 365)
+        return self.df
 
+class FiftyTwoWeekSignal(Signal):
 
+    __mapper_args__ = {'polymorphic_identity' : 'Fifty-Two-Week'}
+
+    EXPIRATION_DAYS = 1
+    WEIGHT = 0.5
+
+    def __init__(self, df):
+        self.df = df
+        self.expiration_date = dt.date.today() + \
+                               dt.timedelta(days=self.EXPIRATION_DAYS)
+        self.weight = self.WEIGHT
+    
+    def __repr__(self):
+        return "<FiftyTwoWeekSignal(id='%s', stock_id='%s', is_buy_signal='%s', " \
+            "signal_type='%s', created_date='%s', expiration_date='%s', " \
+            "weight='%s', description='%s')>" % \
+            (self.id, self.stock_id, self.is_buy_signal, \
+             self.signal_type, self.created_date, self.expiration_date, \
+             self.weight, self.description)
+
+    def evaluate(self):
+        if self.df['52-Week-High'][-2] < self.df['52-Week-High'][-1]:
+            self.is_buy_signal = True
+            self.description = "Price just broke through 52 Week High."
+        elif self.df['52-Week-Low'][-2] > self.df['52-Week-Low'][-1]:
+            self.is_buy_signal = False
+            self.description = "Price just fell through 52 Week Low."
 
 class SMA(object):
     ''' Class to calculate the simple moving average '''

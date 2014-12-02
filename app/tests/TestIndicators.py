@@ -2,12 +2,38 @@ import unittest
 import datetime as dt
 from app.models import Stock, StockPoint, Signal, RSI, RSISignal, MACD
 from app.models import MACDSignalCross, MACDCenterCross, SMA50PriceCross
-from app.models import SMA200PriceCross
+from app.models import SMA200PriceCross, FiftyTwoWeekSignal
 from app import db
 from pandas import DataFrame, DatetimeIndex, isnull
 from decimal import Decimal
 import StockFactory as SF
     
+class Test52Week(unittest.TestCase):
+    def setUp(self):
+        db.create_all()
+        self.stock = SF.build_stock()
+
+    def tearDown(self):
+        db.drop_all()
+
+    def test_buy_signal_triggers(self):
+        df = SF.build_dataframe(values={'52-Week-High':[3,3.01],
+                                        '52-Week-Low':[1,1]})
+        signal = FiftyTwoWeekSignal(df)
+        signal.evaluate()
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == True)
+        assert(signal.description is not None)
+
+    def test_sell_signal_triggers(self):
+        df = SF.build_dataframe(values={'52-Week-High':[3,3],
+                                        '52-Week-Low':[1,.99]})
+        signal = FiftyTwoWeekSignal(df)
+        signal.evaluate()
+        assert(signal.triggered() == True)
+        assert(signal.is_buy_signal == False)
+        assert(signal.description is not None)
+
 class TestSMAPrice200Cross(unittest.TestCase):
     def setUp(self):
         db.create_all()

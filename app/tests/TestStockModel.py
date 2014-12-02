@@ -177,7 +177,8 @@ class TestStock(unittest.TestCase):
                                                  1.76, 1.76, 123456, 30.14,
                                                  1.21, macd_signal=None,
                                                  adj_open=1.25, adj_high=1.33,
-                                                 adj_low=1.45))
+                                                 adj_low=1.45, high_52_weeks=1,
+                                                 low_52_weeks=1))
         db.session.commit()
         
         df = self.stock.load_dataframe_from_db()
@@ -193,6 +194,8 @@ class TestStock(unittest.TestCase):
         assert(df.loc[today]['Adj Open'] == 1.25)
         assert(df.loc[today]['Adj High'] == 1.33)
         assert(df.loc[today]['Adj Low'] == 1.45)
+        assert(df.loc[today]['52-Week-High'] == 1)
+        assert(df.loc[today]['52-Week-Low'] == 1)
 
     @patch('app.models.Stock.fetch_ohlc_from_yahoo')
     def test_fetch_all_ohlc_from_yahoo(self,mock_fetch):   
@@ -268,7 +271,8 @@ class TestStock(unittest.TestCase):
         ''' Should update the RSI, MACD, MACD-Signal, SMAs, and Adj values '''
         df = SF.build_dataframe(values={'RSI':[1],'MACD':[2],'MACD-Signal':[3],
                                         'Adj Open':[1.25],'Adj High':[1.33],
-                                        'Adj Low':[1.45]})
+                                        'Adj Low':[1.45], '52-Week-High':[3],
+                                        '52-Week-High':[3]})
         self.stock._save_dataframe(df) 
         df['RSI'] = 4
         df['MACD'] = 5
@@ -278,6 +282,8 @@ class TestStock(unittest.TestCase):
         df['Adj Open'] = 4
         df['Adj High'] = 5 
         df['Adj Low'] = 6 
+        df['52-Week-High'] = 3
+        df['52-Week-Low'] = 3
         self.stock.update_dataframe(df)
         assert(self.stock.stockpoints[0].rsi == 4)
         assert(self.stock.stockpoints[0].macd == 5)
@@ -287,3 +293,5 @@ class TestStock(unittest.TestCase):
         assert(self.stock.stockpoints[0].adj_open == 4)
         assert(self.stock.stockpoints[0].adj_high == 5)
         assert(self.stock.stockpoints[0].adj_low == 6)
+        assert(self.stock.stockpoints[0].high_52_weeks == 3)
+        assert(self.stock.stockpoints[0].low_52_weeks == 3)
