@@ -99,6 +99,9 @@ def create_or_update_stock(symbol, name, market):
 
 
 @celery.task
+def calculate_indicators_task():
+    calculate_indicators()
+
 def calculate_indicators():
     logging.info('Begin Calculating indicators for all stocks.')
     for stock in Stock.query.all():

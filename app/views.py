@@ -13,6 +13,8 @@ def page_not_found(e):
 
 @app.route('/')
 def index():
+    #fifty_two_high = Stock.find_52_week_highs()
+    #fifty_two_low = Stock.find_52_week_lows()
     buy_stocks = Stock.find_buy_stocks()
     sell_stocks = Stock.find_sell_stocks()
     return render_template('index.html',
@@ -26,7 +28,7 @@ def ohlc_filter(val):
     return format(val, '.2f') if val is not None else 'N/A'
 
 @app.template_filter('volume')
-def ohlc_filter(val):
+def number_filter(val):
     ''' Jinja2 filter that'll filter a large int to include commas '''
     return locale.format("%d", val, grouping=True) if val is not None else 'N/A'
 

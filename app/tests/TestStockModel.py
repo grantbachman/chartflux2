@@ -179,9 +179,10 @@ class TestStock(unittest.TestCase):
                                                  adj_open=1.25, adj_high=1.33,
                                                  adj_low=1.45, high_52_weeks=1,
                                                  low_52_weeks=1))
+        db.session.add(self.stock)
         db.session.commit()
-        
         df = self.stock.load_dataframe_from_db()
+        print df
         assert(df.loc[today]['Open'] == 1.5)
         assert(df.loc[today]['High'] == 3.17)
         assert(df.loc[today]['Low'] == 1.21)
@@ -243,11 +244,15 @@ class TestStock(unittest.TestCase):
     @patch('app.models.Stock.fetch_and_save_missing_ohlc')
     @patch('app.models.Stock.fetch_and_save_all_ohlc')
     def test_get_dataframe(self, mock_fetch_all, mock_fetch_missing):
+        db.session.add(self.stock)
+        db.session.commit()
         self.stock.get_dataframe()
         assert(mock_fetch_all.called)
-        self.stock.stockpoints.append(StockPoint(date=dt.date.today,
+        self.stock.stockpoints.append(StockPoint(date=dt.date.today(),
                                                  open=1,high=2,low=1,close=1,
                                                  adj_close=1,volume=1))
+        db.session.add(self.stock)
+        db.session.commit()
         self.stock.get_dataframe()
         assert(mock_fetch_missing.called)
 
@@ -272,26 +277,20 @@ class TestStock(unittest.TestCase):
         df = SF.build_dataframe(values={'RSI':[1],'MACD':[2],'MACD-Signal':[3],
                                         'Adj Open':[1.25],'Adj High':[1.33],
                                         'Adj Low':[1.45], '52-Week-High':[3],
-                                        '52-Week-High':[3]})
+                                        '52-Week-Low':[3],'SMA-50':[5],
+                                        'SMA-200':[5]})
         self.stock._save_dataframe(df) 
-        df['RSI'] = 4
-        df['MACD'] = 5
-        df['MACD-Signal'] = 6
-        df['SMA-50'] = 5
-        df['SMA-200'] = 5
-        df['Adj Open'] = 4
-        df['Adj High'] = 5 
-        df['Adj Low'] = 6 
-        df['52-Week-High'] = 3
-        df['52-Week-Low'] = 3
+        for index,col in enumerate("""RSI|MACD|MACD-Signal|SMA-50|SMA-200|Adj Open|Adj High|Adj Low|52-Week-High|52-Week-Low""".split('|')):
+            df.ix[0,col] = index 
         self.stock.update_dataframe(df)
-        assert(self.stock.stockpoints[0].rsi == 4)
-        assert(self.stock.stockpoints[0].macd == 5)
-        assert(self.stock.stockpoints[0].macd_signal == 6)
-        assert(self.stock.stockpoints[0].sma_50 == 5)
-        assert(self.stock.stockpoints[0].sma_200 == 5)
-        assert(self.stock.stockpoints[0].adj_open == 4)
-        assert(self.stock.stockpoints[0].adj_high == 5)
-        assert(self.stock.stockpoints[0].adj_low == 6)
-        assert(self.stock.stockpoints[0].high_52_weeks == 3)
-        assert(self.stock.stockpoints[0].low_52_weeks == 3)
+        print self.stock.stockpoints[0]
+        assert(self.stock.stockpoints[0].rsi == 0)
+        assert(self.stock.stockpoints[0].macd == 1)
+        assert(self.stock.stockpoints[0].macd_signal == 2)
+        assert(self.stock.stockpoints[0].sma_50 == 3)
+        assert(self.stock.stockpoints[0].sma_200 == 4)
+        assert(self.stock.stockpoints[0].adj_open == 5)
+        assert(self.stock.stockpoints[0].adj_high == 6)
+        assert(self.stock.stockpoints[0].adj_low == 7)
+        assert(self.stock.stockpoints[0].high_52_weeks == 8)
+        assert(self.stock.stockpoints[0].low_52_weeks == 9)

@@ -94,7 +94,12 @@ class TestMACDCenterCrossInteraction(unittest.TestCase):
 
     def setUp(self):
         db.create_all()
-        self.stock = SF.build_stock()
+        db.session.rollback()
+        assert(len(Stock.query.all())==0)
+        # this test is failing when tested among others. There's some leftover
+        # state somewhere, and there are multiple stocks in the DB. db.drop_all
+        # doesn't fix it..
+        self.stock = SF.build_stock(symbol="NOTESLA")
 
     def tearDown(self):
         db.drop_all()

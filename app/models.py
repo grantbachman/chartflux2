@@ -35,6 +35,11 @@ class Stock(db.Model):
             (self.id, self.symbol, self.name, self.market)
 
     @staticmethod
+    def find_52_week_highs():
+        buy_list = db.session.query(Stock, Signal)
+
+
+    @staticmethod
     def find_buy_stocks():
         ''' Returns a list of (Stock.id, #signals) tuples '''
         buy_list = db.session.query(Stock, func.count(Signal.stock_id))\
@@ -128,33 +133,24 @@ class Stock(db.Model):
         return self.load_dataframe_from_db()
 
     def load_dataframe_from_db(self):
-        df = pd.DataFrame(columns = ('Date','Open','High','Low','Close', 
-                                     'Adj Close', 'Volume', 'RSI', 'MACD',
-                                     'MACD-Signal', 'Adj Open', 'Adj High', 'Adj Low',
-                                     '52-Week-High', '52-Week-Low'
-                                     )
-                          )
-        df.set_index(keys='Date', drop=True, inplace=True)
-        # The values are stored as decimal, convert them to float
-        for point in self.stockpoints:
-            tempList = [float(point.open),
-                        float(point.high),
-                        float(point.low),
-                        float(point.close),
-                        float(point.adj_close),
-                        int(point.volume)
-                       ]
-            
-            # you can't run float on a NoneType object
-            optional = [point.rsi, point.macd, point.macd_signal,\
-                        point.adj_open, point.adj_high, point.adj_low,
-                        point.high_52_weeks, point.low_52_weeks]
-            for opt in optional:
-                if opt is not None:
-                    tempList.append(float(opt))
-                else:
-                    tempList.append(opt)
-            df.loc[point.date] = tempList
+        df = pd.DataFrame(db.engine.execute("""SELECT date,open,adj_open,high,
+                                            adj_high,low,adj_low,close,
+                                            adj_close,volume,rsi,macd,
+                                            macd_signal,high_52_weeks,
+                                            low_52_weeks,sma_50,sma_200
+                                            FROM stock_point
+                                            WHERE stock_id = %s
+                                            ORDER BY date ASC"""\
+                                            % self.id).fetchall())
+
+        if len(df) > 0: # can't add columns when the DF is empty or you get
+                        # ValueError: Length mismatch
+            df.columns = ['Date','Open','Adj Open','High','Adj High','Low', \
+                          'Adj Low','Close','Adj Close','Volume','RSI','MACD',\
+                          'MACD-Signal','52-Week-High','52-Week-Low',
+                          'SMA-50','SMA-200']
+            df.set_index(pd.DatetimeIndex(df['Date']), inplace=True)
+            df.drop('Date', axis=1, inplace=True)
         return df
 
     def _save_dataframe(self, df): 
